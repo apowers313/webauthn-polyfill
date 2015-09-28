@@ -2,20 +2,31 @@ var defaultTimeout = 10;
 var defaultAuthPort = 61904;
 var maxTimeout = 30 * 60; // max timeout for a call is 30 minutes
 var minTimeout = 3; // minimum timeout is 3 seconds
+var supportedCryptoTypes = [ "FIDO" ];
 
 /********************************************************************************
  * IIFE module to keep namespace clean and protect internals...
  *********************************************************************************/
 window.fido = (function () {
-    // var fidoAPI = Object.create(null);
-    var fidoAPI = {};
+    var fidoAPI = function () {};
+
+    function _makeRpId(origin) {
+        var parser = document.createElement('a');
+        parser.href = origin;
+        console.log("RPID:", parser.hostname);
+        return parser.hostname;
+    }
+
+    function _normalizeAlgorithm(keyAlgorithm) {
+        
+    }
 
     /**
      * Get Credentials
      *
      * FIDO 2.0 Web API Specification, Section 4.1.1
      */
-    fidoAPI.__proto__.makeCredential = function (
+    fidoAPI.prototype.makeCredential = function (
         account,
         cryptoParameters,
         attestationChallenge,
@@ -24,13 +35,15 @@ window.fido = (function () {
         extensions) {
         console.log("makeCredential");
         var callerOrigin = document.origin;
+        console.log("Origin:", callerOrigin);
+        var rpId = _makeRpId(callerOrigin);
         // argument checking
         // TODO: check types
+        if (timeoutSeconds === undefined || timeoutSeconds < minTimeout) {
+            timeoutSeconds = minTimeout;
+        }
         if (timeoutSeconds > maxTimeout) {
             timeoutSeconds = maxTimeout;
-        }
-        if (timeoutSeconds < minTimeout) {
-            timeoutSeconds = minTimeout;
         }
         if (blacklist === undefined) {
             blacklist = [];
@@ -55,14 +68,44 @@ window.fido = (function () {
             //  reject(err);
             // }, this.adjustedTimeout * 1000);
 
-            // resolve();
+            var i;
+            // find a crypto type that meets our needs
+            for (i = 0; i < cryptoParameters.length; i++) {
+                var current = cryptoParameters[i];
+                if (supportedCryptoTypes.indexOf (current.type) === -1) {
+                    continue;
+                }
+
+                // WebCrypto Section 18.4, Normalizing Algorithm
+                var keyAlgorithm = {
+                    alg: current.algorithm,
+                    op: "generateKey"
+                };
+                _normalizeAlgorithm (keyAlgorithm);
+            }
+
+            for (i = 0; i < _authenticatorList.length; i++) {
+                console.log("Calling authenticatorMakeCredential");
+                // Web API 4.1.1 says to call with: callerOrigin, rpId, account, current.type, normalizedAlgorithm, blacklist, attestationChallenge and clientExtensions
+                // External Authenticator Protocol 4.1 says to use the args below
+                _authenticatorList[i].authenticatorMakeCredential(
+                    rpId,
+                    account
+                    // clientDataHash,
+                    // cryptoParameters,
+                    // blacklist,
+                    // extensions
+                );
+            }
+
+            resolve (true);
         });
     };
 
     /**
      * getAssertion
      */
-    fidoAPI.__proto__.getAssertion = function (
+    fidoAPI.prototype.getAssertion = function (
         assertionChallenge,
         timeoutSeconds,
         whitelist,
@@ -79,8 +122,8 @@ window.fido = (function () {
      *
      * just a template; can use getters and setters if strict type enforcement is desired
      */
-    fidoAPI.__proto__.fidoCredentialInfo = {};
-    Object.defineProperties(fidoAPI.__proto__.fidoCredentialInfo, {
+    fidoAPI.prototype.fidoCredentialInfo = {};
+    Object.defineProperties(fidoAPI.prototype.fidoCredentialInfo, {
         credential: {
             enumerable: true,
             configurable: true,
@@ -109,8 +152,8 @@ window.fido = (function () {
      * Defined in FIDO 2.0 Web API, Section 4.3
      * just a template; can use getters and setters if strict type enforcement is desired
      */
-    fidoAPI.__proto__.fidoAccount = {};
-    Object.defineProperties(fidoAPI.__proto__.fidoAccount, {
+    fidoAPI.prototype.fidoAccount = {};
+    Object.defineProperties(fidoAPI.prototype.fidoAccount, {
         rpDisplayName: {
             enumerable: true,
             configurable: true,
@@ -143,8 +186,8 @@ window.fido = (function () {
      *
      * just a template; can use getters and setters if strict type enforcement is desired
      */
-    fidoAPI.__proto__.fidoCredentialProperties = {};
-    Object.defineProperties(fidoAPI.__proto__.fidoCredentialProperties, {
+    fidoAPI.prototype.fidoCredentialProperties = {};
+    Object.defineProperties(fidoAPI.prototype.fidoCredentialProperties, {
         credentialType: {
             enumerable: true,
             configurable: true,
@@ -163,8 +206,8 @@ window.fido = (function () {
      * defined in the specification
      * just a template; can use getters and setters if strict type enforcement is desired
      */
-    fidoAPI.__proto__.fidoCredential = {};
-    Object.defineProperties(fidoAPI.__proto__.fidoCredential, {
+    fidoAPI.prototype.fidoCredential = {};
+    Object.defineProperties(fidoAPI.prototype.fidoCredential, {
         credentialType: {
             enumerable: true,
             configurable: true,
@@ -190,30 +233,44 @@ window.fido = (function () {
     fidoAuthenticator.prototype = {
         constructor: fidoAuthenticator,
         authenticatorDiscover: function () {},
-        authenticatorMakeCredential: function () {},
+        authenticatorMakeCredential: function () {
+            // return new Promise(function (resolve, reject) {
+            //     resolve(true);
+            // });
+        },
         authenticatorGetAssertion: function () {},
         authenticatorCancel: function () {}
     };
+    fidoAPI.prototype.fidoAuthenticator = fidoAuthenticator;
+    var _authenticatorList = [];
 
-    fidoAPI.__proto__.addAuthenticator = function (auth) {
+    fidoAPI.prototype.addAuthenticator = function (auth) {
         console.log("addAuthenticator");
-        if (this._authenticatorList === undefined) {
-            this._authenticatorList = [];
-        }
 
         if (auth instanceof fidoAuthenticator) {
             console.log("Adding authenticator");
-            this._authenticatorList.push(auth);
+            _authenticatorList.push(auth);
         } else {
             console.log("Adding authenticator: Authenticator was wrong type, failing");
         }
     };
 
     // removeAuthenticator
-    fidoAPI.__proto__.listAuthenticators = function () {
-        // deep copy
-        return JSON.parse(JSON.stringify(this._authenticatorList));
+    fidoAPI.prototype.listAuthenticators = function () {
+        // cheap deep copy
+        return JSON.parse(JSON.stringify(_authenticatorList));
     };
 
-    return fidoAPI;
+    fidoAPI.prototype.removeAllAuthenticators = function () {
+        _authenticatorList = [];
+    };
+
+    /********************************************************************************
+     * Everything below this line is an extension to the specification for managing extensions
+     *********************************************************************************/
+    // addExtension
+    // removeExtension
+
+    // TODO: seal returned object and make all functions non-writeable (for security purposes)
+    return new fidoAPI();
 }());

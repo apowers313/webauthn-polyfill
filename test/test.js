@@ -26,6 +26,7 @@ var blacklist = []; // No blacklist
 var extensions = {
     "fido.location": true // Include location information in attestation
 };
+// window.fido.addAuthenticator (new fidoAuthenticator());
 
 /*
  * Basic tests
@@ -48,6 +49,9 @@ suite("Basic Tests", function () {
 });
 
 suite("makeCredential Tests", function () {
+	teardown (function () {
+		window.fido.removeAllAuthenticators();
+	});
 
     test("makeCredential returns promise", function () {
         var fidoAPI = window.fido;
@@ -63,6 +67,29 @@ suite("makeCredential Tests", function () {
         fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
             timeoutSeconds, blacklist, extensions);
     });
+
+    test("makeCredential should call authenticatorMakeCredential", function(done) {
+    	var fidoAPI = window.fido;
+    	var auth = new fidoAPI.fidoAuthenticator();
+    	var spy =  sinon.spy (auth, "authenticatorMakeCredential");
+    	fidoAPI.addAuthenticator (auth);
+
+    	fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+            timeoutSeconds, blacklist, extensions)
+    	.then(function (ret) {
+    		sinon.assert.calledOnce (spy);
+    		sinon.assert.alwaysCalledWithExactly (spy, "localhost", userAccountInformation);
+    		assert.strictEqual (ret, true, "Should returne true ret");
+    		done();
+    	});
+    });
+
+    test ("makeCredential fails without account parameter");
+    test ("makeCredential fails without cryptoParameters parameter");
+    test ("makeCredential fails without attestationChallenge parameter");
+    test ("makeCredential passes without timeoutSeconds parameter");
+    test ("makeCredential passes without blacklist parameter");
+    test ("makeCredential passes without extensions parameter");
     test("makeCredential with basic accountInfo");
     test("makeCredential with missing accountInfo");
     test("Crypto Params");
@@ -83,9 +110,22 @@ suite("Decommissioning", function () {
 });
 
 suite("Proprietary Tests", function () {
-    test.skip("Discovery", function () {
-    	authDiscover();
-    });
+	teardown (function () {
+		window.fido.removeAllAuthenticators();
+	});
+
+	test ("addAuthenticator", function () {
+		var fidoAPI = window.fido;
+
+		assert.isDefined (fidoAPI.addAuthenticator, "Should have addAuthenticator extension");
+		assert.isDefined (fidoAPI.listAuthenticators, "Should have listAuthenticators extension");
+		assert.isDefined (fidoAPI.fidoAuthenticator, "Should have fidoAuthenticator extension");
+		assert.isDefined (fidoAPI.removeAllAuthenticators, "Shouldh have removeAllAuthenticators extension");
+		assert.strictEqual (fidoAPI.listAuthenticators().length, 0, "Shouldn't have any authenticators yet");
+
+		fidoAPI.addAuthenticator(new fidoAPI.fidoAuthenticator());
+		assert.strictEqual (fidoAPI.listAuthenticators().length, 1, "Should have one authenticator");
+	});
     test("Helper objects");
     test("Multiple authenticators");
 });
