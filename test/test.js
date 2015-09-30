@@ -85,7 +85,7 @@ suite("makeCredential Tests", function () {
             .then(function (ret) {
                 sinon.assert.calledOnce(spy);
                 sinon.assert.alwaysCalledWithExactly(spy, "localhost", userAccountInformation, /* clientDataHash, cryptoParameters,*/ blacklist, extensions);
-                assert.deepEqual(ret, [undefined], "Should return [undefined] ret");
+                assert.deepEqual(ret, [true], "Should return [true] ret");
                 done();
             })
             .catch(function (err) {
