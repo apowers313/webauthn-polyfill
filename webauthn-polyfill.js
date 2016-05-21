@@ -1,14 +1,16 @@
+// TODO: turn into setOptions call
 var defaultTimeout = 10;
 var defaultAuthPort = 61904;
 var maxTimeout = 30 * 60; // max timeout for a call is 30 minutes
-var minTimeout = 1; // minimum timeout is 3 seconds
+var minTimeout = 1; // minimum timeout is 1 second
+var defaultTimeout = 30;
 var supportedCryptoTypes = ["FIDO"];
 
 /*********************************************************************************
  * IIFE module to keep namespace clean and protect internals...
  *********************************************************************************/
-window.fido = (function () {
-    var fidoAPI = function () {};
+window.fido = (function() {
+    var fidoAPI = function() {};
 
     function _makeRpId(origin) {
         var parser = document.createElement("a");
@@ -141,12 +143,69 @@ window.fido = (function () {
         return res;
     }
 
+    function _callOnAllAuthenticators(timeoutSeconds, method, args) {
+        return new Promise(function(resolve, reject) {
+            var makeCredentialTimer = window.setTimeout(function() {
+                console.log("makeCredential timed out");
+                // TODO: call cancel on all pending authenticators
+                var err = new Error("timedOut");
+                reject(err);
+            }, timeoutSeconds * 1000);
+
+            // attempt to make credentials on each authenticator
+            var i, _pendingList = [];
+            for (i = 0; i < _authenticatorList.length; i++) {
+                // Web API 4.1.1 says to call with: callerOrigin, rpId, account, current.type, normalizedAlgorithm, blacklist, attestationChallenge and clientExtensions
+                // External Authenticator Protocol 4.1 says to use the args below
+                // console.log("Calling authenticatorMakeCredential[" + i + "]");
+                console.log("bump");
+                _pendingList.push(
+                    _authenticatorList[i][method].apply(_authenticatorList[i], args)
+                );
+            }
+
+            // basically Promises.all() that doesn't die on failure
+            // TODO: this probably doesn"t work if the timer lapses, since it won"t .then() anything after the promise that hung
+            // use some version of Promises.race() instead
+            function resolveAll(promises) {
+                var accumulator = [];
+                var ready = Promise.resolve(null);
+
+                console.log("resolving");
+                promises.forEach(function(promise) {
+                    ready = ready.then(function() {
+                        return promise;
+                    }).then(function(value) {
+                        accumulator.push(value);
+                    }).catch(function(err) {
+                        accumulator.push(err);
+                    });
+                });
+
+                return ready.then(function() {
+                    return accumulator;
+                });
+            }
+
+            resolveAll(_pendingList)
+                .then(function(ret) {
+                    console.log("all promises resolved:", ret);
+                    window.clearTimeout(makeCredentialTimer);
+                    return resolve(ret);
+                })
+                .catch(function(err) {
+                    console.log("caught error");
+                    return reject(err);
+                });
+        });
+    }
+
     /**
      * Get Credentials
      *
      * FIDO 2.0 Web API Specification, Section 4.1.1
      */
-    fidoAPI.prototype.makeCredential = function (
+    fidoAPI.prototype.makeCredential = function(
         account,
         cryptoParameters,
         attestationChallenge,
@@ -158,7 +217,10 @@ window.fido = (function () {
         var rpId = _makeRpId(callerOrigin);
         // argument checking
         // TODO: check types
-        if (timeoutSeconds === undefined || timeoutSeconds < minTimeout) {
+        if (timeoutSeconds === undefined) {
+            timeoutSeconds = defaultTimeout;
+        }
+        if (timeoutSeconds < minTimeout) {
             timeoutSeconds = minTimeout;
         }
         if (timeoutSeconds > maxTimeout) {
@@ -173,210 +235,137 @@ window.fido = (function () {
         // Select authenticator
 
         // Return promise
-        return new Promise(function (resolve, reject) {
-            var issuedRequests = [];
+        // return new Promise(function(resolve, reject) {
+        var issuedRequests = [];
 
-            var makeCredentialTimer = window.setTimeout(function () {
-                console.log("makeCredential timed out");
-                // TODO: call cancel on all pending authenticators
-                var err = new Error("timedOut");
-                reject(err);
-            }, timeoutSeconds * 1000);
-
-            var i, current = null;
-            // find a crypto type that meets our needs
-            for (i = 0; i < cryptoParameters.length; i++) {
-                current = cryptoParameters[i];
-                if (supportedCryptoTypes.indexOf(current.type) === -1) {
-                    continue;
-                }
-
-                // WebCrypto Section 18.4, Normalizing Algorithm
-                var keyAlgorithm = {
-                    alg: current.algorithm,
-                    op: "generateKey"
-                };
-                current = null;
-                // TODO: not quite sure how to make this work from userland...
-                console.log ("keyAlgorithm", keyAlgorithm);
-                var x = _normalizeAlgorithm(keyAlgorithm);
-                console.log ("Normalize Algorithm returned:", x);
-            }
-            // should be a valid AlgorithmIdentifier object
-            cryptoParameters = current;
-
-            // TODO: process _extensionHookList
-
-            // attempt to make credentials on each authenticator
-            var _pendingList = [];
-            for (i = 0; i < _authenticatorList.length; i++) {
-                // Web API 4.1.1 says to call with: callerOrigin, rpId, account, current.type, normalizedAlgorithm, blacklist, attestationChallenge and clientExtensions
-                // External Authenticator Protocol 4.1 says to use the args below
-                // console.log("Calling authenticatorMakeCredential[" + i + "]");
-                _pendingList.push(
-                    _authenticatorList[i].authenticatorMakeCredential(
-                        rpId,
-                        account,
-                        // clientDataHash,
-                        // cryptoParameters, // selectedCrypto parameters
-                        blacklist,
-                        extensions
-                    )
-                );
+        var i, current = null;
+        // find a crypto type that meets our needs
+        for (i = 0; i < cryptoParameters.length; i++) {
+            current = cryptoParameters[i];
+            if (supportedCryptoTypes.indexOf(current.type) === -1) {
+                continue;
             }
 
-            // basically Promises.all() that doesn"t die on failure
-            // TODO: this probably doesn"t work if the timer lapses, since it won"t .then() anything after the promise that hung
-            // use some version of Promises.race() instead
-            function resolveAll(promises) {
-                var accumulator = [];
-                var ready = Promise.resolve(null);
+            // WebCrypto Section 18.4, Normalizing Algorithm
+            var keyAlgorithm = {
+                alg: current.algorithm,
+                op: "generateKey"
+            };
+            current = null;
+            // TODO: not quite sure how to make this work from userland...
+            var x = _normalizeAlgorithm(keyAlgorithm);
+        }
+        // should be a valid AlgorithmIdentifier object
+        cryptoParameters = current;
 
-                promises.forEach(function (promise) {
-                    ready = ready.then(function () {
-                        return promise;
-                    }).then(function (value) {
-                        accumulator.push(value);
-                    }).catch(function (err) {
-                        // accumulator.push(err);
-                    });
-                });
+        // TODO: process _extensionHookList
 
-                return ready.then(function () {
-                    return accumulator;
-                });
-            }
-
-            resolveAll(_pendingList)
-                .then(function (ret) {
-                    // console.log("all promises resolved:", ret);
-                    window.clearTimeout(makeCredentialTimer);
-                    resolve(ret);
-                })
-                .catch(function (err) {
-                    console.log("caught error");
-                    reject(err);
-                });
-        });
+        // create clientData hash
+        var clientDataBuffer = new ArrayBuffer(JSON.stringify({
+            challenge: attestationChallenge,
+            facet: callerOrigin,
+            hashAlg: "S256" // TODO: S384, S512, SM3
+        }));
+        // var clientDataHash;
+        // TODO: make sure window.crypto.subtle exists
+        return window.crypto.subtle.digest({
+                    name: "SHA-256",
+                },
+                clientDataBuffer
+            )
+            .then(function(clientDataHash) {
+                //returns the hash as an ArrayBuffer
+                // clientDataHash = new Uint8Array(hash);
+                // console.log(clientDataHash);
+                return _callOnAllAuthenticators(timeoutSeconds, "authenticatorMakeCredential", [rpId,
+                    account,
+                    clientDataHash,
+                    cryptoParameters, // selectedCrypto parameters
+                    blacklist,
+                    extensions
+                ]);
+            });
+        // .then(function(ret) {
+        //     console.log("ret");
+        //     // resolve (ret);
+        // })
+        // .catch(function(err) {
+        //     console.error(err);
+        //     reject (err);
+        // });
+        // });
     };
 
     /**
      * getAssertion
      */
-    fidoAPI.prototype.getAssertion = function (
+    fidoAPI.prototype.getAssertion = function(
         assertionChallenge,
         timeoutSeconds,
         whitelist,
         extensions
     ) {
         console.log("getAssertion");
+        var callerOrigin = document.origin;
+        // argument checking
+        // TODO: check types
+        if (timeoutSeconds === undefined) {
+            timeoutSeconds = defaultTimeout;
+        }
+        if (timeoutSeconds < minTimeout) {
+            timeoutSeconds = minTimeout;
+        }
+        if (timeoutSeconds > maxTimeout) {
+            timeoutSeconds = maxTimeout;
+        }
+
+        // new promise
+        // Return promise
+        return new Promise(function(resolve, reject) {
+            // initialize issuedRequests
+            var issuedRequests = [];
+
+            // start timer
+            var makeCredentialTimer = window.setTimeout(function() {
+                console.log("getAssertion timed out");
+                // TODO: call cancel on all pending authenticators
+                var err = new Error("timedOut");
+                reject(err);
+            }, timeoutSeconds * 1000);
+
+            // for each authenticator...
+            // - create whitelist
+            // - call authenticatorGetAssertion
+            // - add entry to issuedRequests
+            // wait for timer or results
+
+            // create clientData hash
+            var clientDataBuffer = new ArrayBuffer(JSON.stringify({
+                challenge: attestationChallenge,
+                facet: callerOrigin,
+                hashAlg: "S256" // TODO: S384, S512, SM3
+            }));
+            // var clientDataHash;
+            // TODO: make sure window.crypto.subtle exists
+            return window.crypto.subtle.digest({
+                        name: "SHA-256",
+                    },
+                    clientDataBuffer
+                )
+                .then(function(clientDataHash) {
+                    //returns the hash as an ArrayBuffer
+                    // clientDataHash = new Uint8Array(hash);
+                    // console.log(clientDataHash);
+                    return _callOnAllAuthenticators(timeoutSeconds, "authenticatorGetAssertion", [rpId,
+                        account,
+                        clientDataHash,
+                        cryptoParameters, // selectedCrypto parameters
+                        whitelist,
+                        extensions
+                    ]);
+                });
+        });
     };
-
-    /*********************************************************************************
-     * Everything below this line is properietary and not part of the FIDO 2.0 specification
-     *********************************************************************************/
-    /**
-     * Credential Info
-     *
-     * just a template; can use getters and setters if strict type enforcement is desired
-     */
-    fidoAPI.prototype.fidoCredentialInfo = {};
-    Object.defineProperties(fidoAPI.prototype.fidoCredentialInfo, {
-        credential: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        algorithmIdentifier: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        publicKey: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        attestation: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-    });
-
-    /**
-     * Account
-     *
-     * Defined in FIDO 2.0 Web API, Section 4.3
-     * just a template; can use getters and setters if strict type enforcement is desired
-     */
-    fidoAPI.prototype.fidoAccount = {};
-    Object.defineProperties(fidoAPI.prototype.fidoAccount, {
-        rpDisplayName: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        displayName: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        name: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        id: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        imageUri: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        }
-    });
-
-    /**
-     * Credential Parameters
-     *
-     * just a template; can use getters and setters if strict type enforcement is desired
-     */
-    fidoAPI.prototype.fidoCredentialProperties = {};
-    Object.defineProperties(fidoAPI.prototype.fidoCredentialProperties, {
-        credentialType: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        algorithmIdentifier: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        }
-    });
-
-    /**
-     * Credential
-     *
-     * defined in the specification
-     * just a template; can use getters and setters if strict type enforcement is desired
-     */
-    fidoAPI.prototype.fidoCredential = {};
-    Object.defineProperties(fidoAPI.prototype.fidoCredential, {
-        credentialType: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        },
-        id: {
-            enumerable: true,
-            configurable: true,
-            writable: true
-        }
-    });
 
     /*********************************************************************************
      * Everything below this line is an extension to the specification to make authenticators easier to work with
@@ -390,23 +379,20 @@ window.fido = (function () {
     function fidoAuthenticator() {}
     fidoAuthenticator.prototype = {
         constructor: fidoAuthenticator,
-        authenticatorDiscover: function () {},
-        authenticatorMakeCredential: function () {
-            return new Promise(function (resolve, reject) { // stub
-                resolve(true);
-            });
+        authenticatorDiscover: function() {},
+        authenticatorMakeCredential: function() {
+            console.log("got authenticatorMakeCredential");
+            return Promise.resolve(null);
         },
-        authenticatorGetAssertion: function () {
-            return new Promise(function (resolve, reject) { // stub
-                resolve(true);
-            });
+        authenticatorGetAssertion: function() {
+            return Promise.resolve(null);
         },
-        authenticatorCancel: function () {}
+        authenticatorCancel: function() {}
     };
     fidoAPI.prototype.fidoAuthenticator = fidoAuthenticator;
     var _authenticatorList = [];
 
-    fidoAPI.prototype.addAuthenticator = function (auth) {
+    fidoAPI.prototype.addAuthenticator = function(auth) {
         // console.log("addAuthenticator");
 
         if (auth instanceof fidoAuthenticator) {
@@ -418,22 +404,22 @@ window.fido = (function () {
     };
 
     // removeAuthenticator
-    fidoAPI.prototype.listAuthenticators = function () {
+    fidoAPI.prototype.listAuthenticators = function() {
         // cheap deep copy
         return JSON.parse(JSON.stringify(_authenticatorList));
     };
 
-    fidoAPI.prototype.removeAllAuthenticators = function () {
+    fidoAPI.prototype.removeAllAuthenticators = function() {
         _authenticatorList = [];
     };
     /*********************************************************************************
      * Everything below this line is an extension to the specification to make extensions easier to work with
      *********************************************************************************/
-    fidoAPI.prototype.addExtension = function (extensionHook) {
+    fidoAPI.prototype.addExtension = function(extensionHook) {
         this._extensionHookList.push(extensionHook);
     };
 
-    fidoAPI.prototype.removeExtension = function (extensionHook) {
+    fidoAPI.prototype.removeExtension = function(extensionHook) {
         var index = this._extensionHookList.indexOf(extensionHook);
         if (index === -1) return;
         this._extensionHookList = this._extensionHookList.splice(index, 1);
