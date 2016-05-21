@@ -158,7 +158,6 @@ window.fido = (function() {
                 // Web API 4.1.1 says to call with: callerOrigin, rpId, account, current.type, normalizedAlgorithm, blacklist, attestationChallenge and clientExtensions
                 // External Authenticator Protocol 4.1 says to use the args below
                 // console.log("Calling authenticatorMakeCredential[" + i + "]");
-                console.log("bump");
                 _pendingList.push(
                     _authenticatorList[i][method].apply(_authenticatorList[i], args)
                 );
@@ -171,7 +170,6 @@ window.fido = (function() {
                 var accumulator = [];
                 var ready = Promise.resolve(null);
 
-                console.log("resolving");
                 promises.forEach(function(promise) {
                     ready = ready.then(function() {
                         return promise;
@@ -275,8 +273,8 @@ window.fido = (function() {
             )
             .then(function(clientDataHash) {
                 //returns the hash as an ArrayBuffer
-                // clientDataHash = new Uint8Array(hash);
-                // console.log(clientDataHash);
+                // var hash = new Uint8Array(clientDataHash);
+                // console.log(hash);
                 return _callOnAllAuthenticators(timeoutSeconds, "authenticatorMakeCredential", [rpId,
                     account,
                     clientDataHash,
