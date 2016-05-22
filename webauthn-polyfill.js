@@ -9,8 +9,10 @@ var supportedCryptoTypes = ["FIDO"];
 /*********************************************************************************
  * IIFE module to keep namespace clean and protect internals...
  *********************************************************************************/
-window.fido = (function() {
-    var fidoAPI = function() {};
+window.webauthn = (function() {
+    // TODO: change webAuthnAPI to WebAuthnAPI
+    var webAuthnAPI = function() {};
+    console.log ("Loading WebAuthn polyfill...");
 
     function _makeRpId(origin) {
         var parser = document.createElement("a");
@@ -143,6 +145,9 @@ window.fido = (function() {
         return res;
     }
 
+    /**
+     * Calls a method on all authenticators
+     */
     function _callOnAllAuthenticators(timeoutSeconds, method, args) {
         return new Promise(function(resolve, reject) {
             var makeCredentialTimer = window.setTimeout(function() {
@@ -174,6 +179,7 @@ window.fido = (function() {
                     ready = ready.then(function() {
                         return promise;
                     }).then(function(value) {
+                        // TODO: if result is cancel, then cancel all pending requests
                         accumulator.push(value);
                     }).catch(function(err) {
                         accumulator.push(err);
@@ -186,10 +192,19 @@ window.fido = (function() {
             }
 
             resolveAll(_pendingList)
-                .then(function(ret) {
-                    console.log("all promises resolved:", ret);
+                .then(function(res) {
+                    console.log("all promises resolved:", res);
                     window.clearTimeout(makeCredentialTimer);
-                    return resolve(ret);
+
+                    // find the succesful result or return error
+                    var i;
+                    for (i = 0; i < res.length; i++) {
+                        if (typeof res[i] !== undefined &&
+                            !(res[i] instanceof Error)) {
+                            return resolve(res[i])
+                        }
+                    }
+                    return resolve(new Error ("No successful authenticatons"));
                 })
                 .catch(function(err) {
                     console.log("caught error");
@@ -203,7 +218,7 @@ window.fido = (function() {
      *
      * FIDO 2.0 Web API Specification, Section 4.1.1
      */
-    fidoAPI.prototype.makeCredential = function(
+    webAuthnAPI.prototype.makeCredential = function(
         account,
         cryptoParameters,
         attestationChallenge,
@@ -297,7 +312,7 @@ window.fido = (function() {
     /**
      * getAssertion
      */
-    fidoAPI.prototype.getAssertion = function(
+    webAuthnAPI.prototype.getAssertion = function(
         assertionChallenge,
         timeoutSeconds,
         whitelist,
@@ -387,37 +402,37 @@ window.fido = (function() {
         },
         authenticatorCancel: function() {}
     };
-    fidoAPI.prototype.fidoAuthenticator = fidoAuthenticator;
+    webAuthnAPI.prototype.fidoAuthenticator = fidoAuthenticator;
     var _authenticatorList = [];
 
-    fidoAPI.prototype.addAuthenticator = function(auth) {
+    webAuthnAPI.prototype.addAuthenticator = function(auth) {
         // console.log("addAuthenticator");
 
         if (auth instanceof fidoAuthenticator) {
             // console.log("Adding authenticator");
             _authenticatorList.push(auth);
         } else {
-            // console.log("Adding authenticator: Authenticator was wrong type, failing");
+            console.log("Adding authenticator: Authenticator was wrong type, failing:", auth);
         }
     };
 
     // removeAuthenticator
-    fidoAPI.prototype.listAuthenticators = function() {
+    webAuthnAPI.prototype.listAuthenticators = function() {
         // cheap deep copy
         return JSON.parse(JSON.stringify(_authenticatorList));
     };
 
-    fidoAPI.prototype.removeAllAuthenticators = function() {
+    webAuthnAPI.prototype.removeAllAuthenticators = function() {
         _authenticatorList = [];
     };
     /*********************************************************************************
      * Everything below this line is an extension to the specification to make extensions easier to work with
      *********************************************************************************/
-    fidoAPI.prototype.addExtension = function(extensionHook) {
+    webAuthnAPI.prototype.addExtension = function(extensionHook) {
         this._extensionHookList.push(extensionHook);
     };
 
-    fidoAPI.prototype.removeExtension = function(extensionHook) {
+    webAuthnAPI.prototype.removeExtension = function(extensionHook) {
         var index = this._extensionHookList.indexOf(extensionHook);
         if (index === -1) return;
         this._extensionHookList = this._extensionHookList.splice(index, 1);
@@ -429,5 +444,5 @@ window.fido = (function() {
     // removeExtension
 
     // TODO: seal returned object and make all functions non-writeable (for security purposes)
-    return new fidoAPI();
+    return new webAuthnAPI();
 }());

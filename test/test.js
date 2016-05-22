@@ -1,9 +1,9 @@
 var assert = chai.assert;
 
-/*
- * Test fixtures
- * TODO: Move to another file
- */
+/***********************
+ * Helpers
+ ************************/
+//TODO: Move to another file
 var userAccountInformation = {
     rpDisplayName: "PayPal",
     displayName: "John P. Smith",
@@ -11,12 +11,6 @@ var userAccountInformation = {
     id: "1098237235409872",
     imageUri: "https://pics.paypal.com/00/p/aBjjjpqPb.png"
 };
-// This Relying Party will accept either an ES256 or RS256 credential, but 
-// prefers an ES256 credential.
-
-/***********************
- * Helpers
- ************************/
 var cryptoParams = [{
     type: "ScopedCred",
     algorithm: "RSASSA-PKCS1-v1_5",
@@ -38,26 +32,39 @@ var calculatedClientData = {
     hashAlg: "S256"
 };
 var expectedClientDataHash = new ArrayBuffer([227, 176, 196, 66, 152, 252, 28, 20, 154, 251, 244, 200, 153, 111, 185, 36, 39, 174, 65, 228, 100, 155, 147, 76, 164, 149, 153, 27, 120, 82, 184, 85]);
-
-// window.fido.addAuthenticator (new fidoAuthenticator());
+var validMakeCredential = {
+    credential: {
+        type: 'ScopedCred',
+        id: '8DD7414D-EE43-474C-A05D-FDDB828B663B'
+    },
+    publicKey: {
+        kty: 'RSA',
+        alg: 'RS256',
+        ext: false,
+        n: 'lMR4XoxRiY5kptgHhh1XLKnezHC2EWPIImlHS-iUMSKVH32WWUKfEoY5Al_exPtcVuUfcNGtMoysAN65PZzcMKXaQ-2a8AebKwe8qQGBc4yY0EkP99Sgb80rAf1S7s-JRNVtNTRb4qrXVCMxZHu3ubjsdeybMI-fFKzYg9IV6DPotJyx1OpNSdibSwWKDTc5YzGfoOG3vA-1ae9oFOh5ZolhHnr5UkodFKUaxOOHfPrAB0MVT5Y5Stvo_Z_1qFDOLyOWdhxxzl2at3K9tyQC8kgJCNKYsq7-EFzvA9Q90PC6SxGATQoICKn2vCNMBqVHLlTydBmP7-8MoMxefM277w',
+        e: 'AQAB'
+    },
+    attestation: null
+};
+// window.webauthn.addAuthenticator (new fidoAuthenticator());
 
 /*
  * Basic tests
  * If these fail, probably something isn't loaded right and certainly everything else is going to fail
  */
 suite("Basic Tests", function() {
-    test("window.fido exists", function() {
-        assert.isDefined(window.fido, "window.fido should be defined");
+    test("window.webauthn exists", function() {
+        assert.isDefined(window.webauthn, "window.webauthn should be defined");
     });
 
     test("makeCredential exists", function() {
-        assert.isDefined(window.fido.makeCredential, "makeCredential should exist on FIDO object");
-        assert.isFunction(window.fido.makeCredential, "makeCredential should be a function");
+        assert.isDefined(window.webauthn.makeCredential, "makeCredential should exist on WebAuthn object");
+        assert.isFunction(window.webauthn.makeCredential, "makeCredential should be a function");
     });
 
     test("getAssertion exists", function() {
-        assert.isDefined(window.fido.getAssertion, "makeCredential should exist on FIDO object");
-        assert.isFunction(window.fido.getAssertion, "makeCredential should be a function");
+        assert.isDefined(window.webauthn.getAssertion, "getAssertion should exist on WebAuthn object");
+        assert.isFunction(window.webauthn.getAssertion, "getAssertion should be a function");
     });
 });
 
@@ -67,12 +74,12 @@ suite("Basic Tests", function() {
 
 suite("makeCredential Tests", function() {
     teardown(function() {
-        window.fido.removeAllAuthenticators();
+        window.webauthn.removeAllAuthenticators();
     });
 
     test("makeCredential returns promise", function() {
-        var fidoAPI = window.fido;
-        var promise = fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        var webAuthnAPI = window.webauthn;
+        var promise = webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
             timeoutSeconds, blacklist, extensions);
         console.log("Got promise:", promise);
         // MS Edge doesn't show that a Promise is an object... strange
@@ -83,24 +90,24 @@ suite("makeCredential Tests", function() {
 
 
     test("makeCredential is callable", function() {
-        var fidoAPI = window.fido;
-        return fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        var webAuthnAPI = window.webauthn;
+        return webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
             timeoutSeconds, blacklist, extensions);
     });
 
-    test.only("makeCredential should call authenticatorMakeCredential", function(done) {
-        var fidoAPI = window.fido;
-        var auth = new fidoAPI.fidoAuthenticator();
+    test("makeCredential should call authenticatorMakeCredential", function(done) {
+        var webAuthnAPI = window.webauthn;
+        var auth = new webAuthnAPI.fidoAuthenticator();
         var spy = sinon.spy(auth, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth);
+        webAuthnAPI.addAuthenticator(auth);
 
-        fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
                 timeoutSeconds, blacklist, extensions)
             .then(function(ret) {
                 sinon.assert.calledOnce(spy);
                 // TODO: update this assertion
                 sinon.assert.alwaysCalledWithExactly(spy, "localhost", userAccountInformation, expectedClientDataHash, expectedCryptoParams, blacklist, extensions);
-                assert.deepEqual(ret, [null], "Should return [null] ret");
+                assert.deepEqual(ret, null, "Should return null ret");
                 done();
             })
             .catch(function(err) {
@@ -111,8 +118,8 @@ suite("makeCredential Tests", function() {
     });
 
     test("makeCredential timeout", function(done) {
-        var fidoAPI = window.fido;
-        var auth = new fidoAPI.fidoAuthenticator();
+        var webAuthnAPI = window.webauthn;
+        var auth = new webAuthnAPI.fidoAuthenticator();
 
         function authenticatorMakeCredential() {
             return new Promise(function(resolve, reject) {
@@ -121,9 +128,9 @@ suite("makeCredential Tests", function() {
         }
         auth.authenticatorMakeCredential = authenticatorMakeCredential;
         var spy = sinon.spy(auth, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth);
+        webAuthnAPI.addAuthenticator(auth);
 
-        fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
                 1, blacklist, extensions)
             .then(function(ret) {
                 console.log("Ret:", ret);
@@ -138,8 +145,8 @@ suite("makeCredential Tests", function() {
     });
 
     test("makeCredential resolved promise shouldn't timeout", function(done) {
-        var fidoAPI = window.fido;
-        var auth = new fidoAPI.fidoAuthenticator();
+        var webAuthnAPI = window.webauthn;
+        var auth = new webAuthnAPI.fidoAuthenticator();
 
         function authenticatorMakeCredential() {
             return new Promise(function(resolve, reject) {
@@ -148,13 +155,13 @@ suite("makeCredential Tests", function() {
         }
         auth.authenticatorMakeCredential = authenticatorMakeCredential;
         var spy = sinon.spy(auth, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth);
+        webAuthnAPI.addAuthenticator(auth);
 
-        fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
                 1, blacklist, extensions)
             .then(function(ret) {
                 sinon.assert.calledOnce(spy);
-                assert.deepEqual(ret, ["beer"], "authenticatorMakeCredential should give me 'beer'");
+                assert.deepEqual(ret, "beer", "authenticatorMakeCredential should give me 'beer'");
                 done();
             })
             .catch(function(err) {
@@ -165,8 +172,8 @@ suite("makeCredential Tests", function() {
     });
 
     test("makeCredential should return successful promise", function(done) {
-        var fidoAPI = window.fido;
-        var auth = new fidoAPI.fidoAuthenticator();
+        var webAuthnAPI = window.webauthn;
+        var auth = new webAuthnAPI.fidoAuthenticator();
 
         function authenticatorMakeCredential() {
             return new Promise(function(resolve, reject) {
@@ -175,13 +182,13 @@ suite("makeCredential Tests", function() {
         }
         auth.authenticatorMakeCredential = authenticatorMakeCredential;
         var spy = sinon.spy(auth, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth);
+        webAuthnAPI.addAuthenticator(auth);
 
-        fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
                 1, blacklist, extensions)
             .then(function(ret) {
                 sinon.assert.calledOnce(spy);
-                assert.deepEqual(ret, ["beer"], "authenticatorMakeCredential should give me ['beer']");
+                assert.deepEqual(ret, "beer", "authenticatorMakeCredential should give me 'beer'");
                 done();
             })
             .catch(function(err) {
@@ -192,10 +199,10 @@ suite("makeCredential Tests", function() {
     });
 
     test("makeCredential should return successful promise for two authenticators", function(done) {
-        var fidoAPI = window.fido;
+        var webAuthnAPI = window.webauthn;
 
         // make authenticator 1
-        var auth1 = new fidoAPI.fidoAuthenticator();
+        var auth1 = new webAuthnAPI.fidoAuthenticator();
 
         function amc1() {
             return new Promise(function(resolve, reject) {
@@ -204,10 +211,10 @@ suite("makeCredential Tests", function() {
         }
         auth1.authenticatorMakeCredential = amc1;
         var spy1 = sinon.spy(auth1, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth1);
+        webAuthnAPI.addAuthenticator(auth1);
 
         // make authenticator 2
-        var auth2 = new fidoAPI.fidoAuthenticator();
+        var auth2 = new webAuthnAPI.fidoAuthenticator();
 
         function amc2() {
             return new Promise(function(resolve, reject) {
@@ -216,14 +223,14 @@ suite("makeCredential Tests", function() {
         }
         auth2.authenticatorMakeCredential = amc2;
         var spy2 = sinon.spy(auth2, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth2);
+        webAuthnAPI.addAuthenticator(auth2);
 
-        fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
                 1, blacklist, extensions)
             .then(function(ret) {
                 sinon.assert.calledOnce(spy1);
                 sinon.assert.calledOnce(spy2);
-                assert.deepEqual(ret, ["beer", "whiskey"], "authenticatorMakeCredential should give me ['beer']");
+                assert.deepEqual(ret, "beer", "authenticatorMakeCredential should give me 'beer'");
                 done();
             })
             .catch(function(err) {
@@ -234,10 +241,10 @@ suite("makeCredential Tests", function() {
     });
 
     test.skip("makeCredential should return successful promise for two authenticators where one times out", function(done) {
-        var fidoAPI = window.fido;
+        var webAuthnAPI = window.webauthn;
 
         // make authenticator 1
-        var auth1 = new fidoAPI.fidoAuthenticator();
+        var auth1 = new webAuthnAPI.fidoAuthenticator();
 
         function amc1() {
             return new Promise(function(resolve, reject) {
@@ -246,10 +253,10 @@ suite("makeCredential Tests", function() {
         }
         auth1.authenticatorMakeCredential = amc1;
         var spy1 = sinon.spy(auth1, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth1);
+        webAuthnAPI.addAuthenticator(auth1);
 
         // make authenticator 2
-        var auth2 = new fidoAPI.fidoAuthenticator();
+        var auth2 = new webAuthnAPI.fidoAuthenticator();
 
         function amc2() {
             return new Promise(function(resolve, reject) {
@@ -258,9 +265,9 @@ suite("makeCredential Tests", function() {
         }
         auth2.authenticatorMakeCredential = amc2;
         var spy2 = sinon.spy(auth2, "authenticatorMakeCredential");
-        fidoAPI.addAuthenticator(auth2);
+        webAuthnAPI.addAuthenticator(auth2);
 
-        fidoAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
+        webAuthnAPI.makeCredential(userAccountInformation, cryptoParams, challenge,
                 1, blacklist, extensions)
             .then(function(ret) {
                 sinon.assert.calledOnce(spy1);
@@ -303,20 +310,20 @@ suite("Decommissioning", function() {
 
 suite("Proprietary Tests", function() {
     teardown(function() {
-        window.fido.removeAllAuthenticators();
+        window.webauthn.removeAllAuthenticators();
     });
 
     test("addAuthenticator", function() {
-        var fidoAPI = window.fido;
+        var webAuthnAPI = window.webauthn;
 
-        assert.isDefined(fidoAPI.addAuthenticator, "Should have addAuthenticator extension");
-        assert.isDefined(fidoAPI.listAuthenticators, "Should have listAuthenticators extension");
-        assert.isDefined(fidoAPI.fidoAuthenticator, "Should have fidoAuthenticator extension");
-        assert.isDefined(fidoAPI.removeAllAuthenticators, "Should have removeAllAuthenticators extension");
-        assert.strictEqual(fidoAPI.listAuthenticators().length, 0, "Shouldn't have any authenticators yet");
+        assert.isDefined(webAuthnAPI.addAuthenticator, "Should have addAuthenticator extension");
+        assert.isDefined(webAuthnAPI.listAuthenticators, "Should have listAuthenticators extension");
+        assert.isDefined(webAuthnAPI.fidoAuthenticator, "Should have fidoAuthenticator extension");
+        assert.isDefined(webAuthnAPI.removeAllAuthenticators, "Should have removeAllAuthenticators extension");
+        assert.strictEqual(webAuthnAPI.listAuthenticators().length, 0, "Shouldn't have any authenticators yet");
 
-        fidoAPI.addAuthenticator(new fidoAPI.fidoAuthenticator());
-        assert.strictEqual(fidoAPI.listAuthenticators().length, 1, "Should have one authenticator");
+        webAuthnAPI.addAuthenticator(new webAuthnAPI.fidoAuthenticator());
+        assert.strictEqual(webAuthnAPI.listAuthenticators().length, 1, "Should have one authenticator");
     });
     test("Helper objects");
     test("Multiple authenticators");
