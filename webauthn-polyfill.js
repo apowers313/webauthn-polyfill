@@ -320,6 +320,7 @@ window.webauthn = (function() {
     ) {
         console.log("getAssertion");
         var callerOrigin = document.origin;
+        var rpId = _makeRpId(callerOrigin);
         // argument checking
         // TODO: check types
         if (timeoutSeconds === undefined) {
@@ -331,6 +332,7 @@ window.webauthn = (function() {
         if (timeoutSeconds > maxTimeout) {
             timeoutSeconds = maxTimeout;
         }
+        console.log ("Timeout:", timeoutSeconds);
 
         // new promise
         // Return promise
@@ -354,7 +356,7 @@ window.webauthn = (function() {
 
             // create clientData hash
             var clientDataBuffer = new ArrayBuffer(JSON.stringify({
-                challenge: attestationChallenge,
+                challenge: assertionChallenge,
                 facet: callerOrigin,
                 hashAlg: "S256" // TODO: S384, S512, SM3
             }));
@@ -370,9 +372,8 @@ window.webauthn = (function() {
                     // clientDataHash = new Uint8Array(hash);
                     // console.log(clientDataHash);
                     return _callOnAllAuthenticators(timeoutSeconds, "authenticatorGetAssertion", [rpId,
-                        account,
+                        assertionChallenge,
                         clientDataHash,
-                        cryptoParameters, // selectedCrypto parameters
                         whitelist,
                         extensions
                     ]);
