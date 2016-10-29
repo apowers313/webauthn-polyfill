@@ -334,6 +334,7 @@ window.webauthn = (function() {
         if (timeoutSeconds > maxTimeout) {
             timeoutSeconds = maxTimeout;
         }
+        console.log ("Timeout:", timeoutSeconds);
 
         // new promise
         // Return promise
