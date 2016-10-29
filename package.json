@@ -1,0 +1,30 @@
+{
+  "name": "webauthn-polyfill",
+  "version": "0.0.1",
+  "description": "A W3C WebAuthn Polyfill",
+  "main": "webauthn-polyfill.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apowers313/webauthn-polyfill.git"
+  },
+  "keywords": [
+    "webauthn",
+    "auth",
+    "authn",
+    "fido2",
+    "polyfill",
+    "webauth"
+  ],
+  "author": "Adam Powers",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/apowers313/webauthn-polyfill/issues"
+  },
+  "homepage": "https://github.com/apowers313/webauthn-polyfill#readme"
+}

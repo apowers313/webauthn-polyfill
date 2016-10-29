@@ -12,7 +12,7 @@ var supportedCryptoTypes = ["FIDO"];
 window.webauthn = (function() {
     // TODO: change webAuthnAPI to WebAuthnAPI
     var webAuthnAPI = function() {};
-    console.log ("Loading WebAuthn polyfill...");
+    console.log("Loading WebAuthn polyfill...");
 
     function _makeRpId(origin) {
         var parser = document.createElement("a");
@@ -150,7 +150,7 @@ window.webauthn = (function() {
      */
     function _callOnAllAuthenticators(timeoutSeconds, method, args) {
         return new Promise(function(resolve, reject) {
-            var makeCredentialTimer = window.setTimeout(function() {
+            var pendingTimer = window.setTimeout(function() {
                 console.log("makeCredential timed out");
                 // TODO: call cancel on all pending authenticators
                 var err = new Error("timedOut");
@@ -180,6 +180,7 @@ window.webauthn = (function() {
                         return promise;
                     }).then(function(value) {
                         // TODO: if result is cancel, then cancel all pending requests
+                        console.log("Got value:", value);
                         accumulator.push(value);
                     }).catch(function(err) {
                         accumulator.push(err);
@@ -193,18 +194,19 @@ window.webauthn = (function() {
 
             resolveAll(_pendingList)
                 .then(function(res) {
-                    console.log("all promises resolved:", res);
-                    window.clearTimeout(makeCredentialTimer);
+                    // console.log("all promises resolved:", res);
+                    window.clearTimeout(pendingTimer);
 
                     // find the succesful result or return error
                     var i;
                     for (i = 0; i < res.length; i++) {
                         if (typeof res[i] !== undefined &&
                             !(res[i] instanceof Error)) {
-                            return resolve(res[i])
+                            console.log(method, "returning", res[i]);
+                            return resolve(res[i]);
                         }
                     }
-                    return resolve(new Error ("No successful authenticatons"));
+                    return resolve(new Error("No successful authenticatons"));
                 })
                 .catch(function(err) {
                     console.log("caught error");
@@ -320,6 +322,7 @@ window.webauthn = (function() {
     ) {
         console.log("getAssertion");
         var callerOrigin = document.origin;
+        var rpId = _makeRpId(callerOrigin);
         // argument checking
         // TODO: check types
         if (timeoutSeconds === undefined) {
@@ -334,50 +337,48 @@ window.webauthn = (function() {
 
         // new promise
         // Return promise
-        return new Promise(function(resolve, reject) {
+        // return new Promise(function(resolve, reject) { // TODO: return inner Promise instead
             // initialize issuedRequests
             var issuedRequests = [];
 
-            // start timer
-            var makeCredentialTimer = window.setTimeout(function() {
-                console.log("getAssertion timed out");
-                // TODO: call cancel on all pending authenticators
-                var err = new Error("timedOut");
-                reject(err);
-            }, timeoutSeconds * 1000);
-
-            // for each authenticator...
-            // - create whitelist
-            // - call authenticatorGetAssertion
-            // - add entry to issuedRequests
-            // wait for timer or results
-
             // create clientData hash
             var clientDataBuffer = new ArrayBuffer(JSON.stringify({
-                challenge: attestationChallenge,
+                challenge: assertionChallenge,
                 facet: callerOrigin,
                 hashAlg: "S256" // TODO: S384, S512, SM3
             }));
-            // var clientDataHash;
+
             // TODO: make sure window.crypto.subtle exists
-            return window.crypto.subtle.digest({
+            return window.crypto.subtle.digest({ // create clientDataHash
                         name: "SHA-256",
                     },
                     clientDataBuffer
                 )
-                .then(function(clientDataHash) {
-                    //returns the hash as an ArrayBuffer
+                .then(function(clientDataHash) { // call authenticatorGetAssertion on all authenticators
                     // clientDataHash = new Uint8Array(hash);
                     // console.log(clientDataHash);
+
+                    // TODO: for each authenticator...
+                    // - create whitelist
+                    // - call authenticatorGetAssertion
+                    // - add entry to issuedRequests
+                    // wait for timer or results
                     return _callOnAllAuthenticators(timeoutSeconds, "authenticatorGetAssertion", [rpId,
-                        account,
+                        assertionChallenge,
                         clientDataHash,
-                        cryptoParameters, // selectedCrypto parameters
                         whitelist,
                         extensions
                     ]);
+                })
+                .then(function(res) {
+                    console.log ("getAssertion res:", res);
+                    res.clientData = clientDataBuffer;
+                    return Promise.resolve(res);
+                })
+                .catch(function(err) {
+                    return Promise.reject(err);
                 });
-        });
+        // }.bind(this));
     };
 
     /*********************************************************************************
@@ -398,6 +399,7 @@ window.webauthn = (function() {
             return Promise.resolve(null);
         },
         authenticatorGetAssertion: function() {
+            console.log("got authenticatorGetAssertion");
             return Promise.resolve(null);
         },
         authenticatorCancel: function() {}
@@ -426,7 +428,7 @@ window.webauthn = (function() {
         _authenticatorList = [];
     };
     /*********************************************************************************
-     * Everything below this line is an extension to the specification to make extensions easier to work with
+     * Everything below this line is an extension to the specification for managing extensions
      *********************************************************************************/
     webAuthnAPI.prototype.addExtension = function(extensionHook) {
         this._extensionHookList.push(extensionHook);
@@ -437,11 +439,6 @@ window.webauthn = (function() {
         if (index === -1) return;
         this._extensionHookList = this._extensionHookList.splice(index, 1);
     };
-    /*********************************************************************************
-     * Everything below this line is an extension to the specification for managing extensions
-     *********************************************************************************/
-    // addExtension
-    // removeExtension
 
     // TODO: seal returned object and make all functions non-writeable (for security purposes)
     return new webAuthnAPI();

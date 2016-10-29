@@ -20,9 +20,11 @@ var expectedCryptoParams = {
     algorithm: "RSASSA-PKCS1-v1_5",
 };
 var challenge = "Y2xpbWIgYSBtb3VudGFpbg";
+var rpId = "localhost";
 // var timeoutSeconds = 300; // 5 minutes
 var timeoutSeconds = 1;
 var blacklist = []; // No blacklist
+var whitelist = []; // No whitelist
 var extensions = {
     "fido.location": true // Include location information in attestation
 };
@@ -106,7 +108,7 @@ suite("makeCredential Tests", function() {
             .then(function(ret) {
                 sinon.assert.calledOnce(spy);
                 // TODO: update this assertion
-                sinon.assert.alwaysCalledWithExactly(spy, "localhost", userAccountInformation, expectedClientDataHash, expectedCryptoParams, blacklist, extensions);
+                sinon.assert.alwaysCalledWithExactly(spy, rpId, userAccountInformation, expectedClientDataHash, expectedCryptoParams, blacklist, extensions);
                 assert.deepEqual(ret, null, "Should return null ret");
                 done();
             })
@@ -298,7 +300,57 @@ suite("makeCredential Tests", function() {
     test("Extensions");
 });
 
-suite("getAssertion Tests", function() {
+suite.only("getAssertion Tests", function() {
+    teardown(function() {
+        window.webauthn.removeAllAuthenticators();
+    });
+
+    test("getAssertion returns promise", function() {
+        var webAuthnAPI = window.webauthn;
+        var promise = webAuthnAPI.getAssertion(userAccountInformation, cryptoParams, challenge,
+            timeoutSeconds, blacklist, extensions);
+        console.log("Got promise:", promise);
+        // MS Edge doesn't show that a Promise is an object... strange
+        // assert.isObject(promise, "getAssertion should return a function");
+        // not sure this is fair... what if we are using a Promise polyfill / shim on a non-ES6 browser?
+        assert.instanceOf(promise, Promise, "getAssertion should return a promise");
+    });
+
+
+    test("getAssertion is callable", function() {
+        var webAuthnAPI = window.webauthn;
+        return webAuthnAPI.getAssertion(userAccountInformation, cryptoParams, challenge,
+            timeoutSeconds, blacklist, extensions);
+    });
+
+    test("getAssertion should call authenticatorGetAssertion", function(done) {
+        var webAuthnAPI = window.webauthn;
+        var auth = new webAuthnAPI.fidoAuthenticator();
+        var spy = sinon.spy(auth, "authenticatorGetAssertion");
+        webAuthnAPI.addAuthenticator(auth);
+
+        webAuthnAPI.getAssertion(challenge,
+                timeoutSeconds, whitelist, extensions)
+            .then(function(ret) {
+                sinon.assert.calledOnce(spy);
+                // TODO: update this assertion
+                // rpId, 
+                //         callerOrigin,
+                //         assertionChallenge,
+                //         clientDataHash,
+                //         whitelist,
+                //         extensions
+                sinon.assert.alwaysCalledWithExactly(spy, rpId, challenge, expectedClientDataHash, whitelist, extensions);
+                assert.deepEqual(ret, null, "Should return null ret");
+                done();
+            })
+            .catch(function(err) {
+                console.log("Error:", err);
+                assert(false, "Promise should not be rejected");
+                done();
+            });
+    });
+
     test("Challenge");
     test("Timeout");
     test("Credentials");
