@@ -23,23 +23,24 @@ var supportedCryptoTypes = ["FIDO"];
                 // TODO XXX: check secure context!!
                 // use: _makeRpId() then verify https
 
-                // TODO: rename, convert to class
-                function fidoAuthenticator() {}
-                fidoAuthenticator.prototype = {
-                    constructor: fidoAuthenticator,
-                    authenticatorDiscover: function() {},
-                    authenticatorMakeCredential: function() {
+                // TODO: rename
+                class fidoAuthenticator {
+                    constructor() {}
+                    authenticatorDiscover() {}
+                    authenticatorMakeCredential() {
                         console.log("got authenticatorMakeCredential");
                         return Promise.resolve(null);
-                    },
-                    authenticatorGetAssertion: function() {
+                    }
+                    authenticatorGetAssertion() {
                         console.log("got authenticatorGetAssertion");
                         return Promise.resolve(null);
-                    },
-                    authenticatorCancel: function() {}
-                };
+                    }
+                    authenticatorCancel() {}
+                }
+
                 this.fidoAuthenticator = fidoAuthenticator;
                 this._authenticatorList = [];
+                this.name = "bob";
             }
             /**
              * toStringTag
@@ -63,129 +64,129 @@ var supportedCryptoTypes = ["FIDO"];
             options) {
             // TODO: Select authenticator
 
-            // Return promise
-            return new Promise(function(resolve, reject) {
-                console.log("makeCredential:");
-                console.log("- account:", accountInformation);
-                console.log("- cryptoParameters:", cryptoParameters);
-                var callerOrigin = document.origin;
-                console.log("Origin:", callerOrigin);
-                var rpId = _makeRpId(callerOrigin);
+            console.log("makeCredential:");
+            console.log("- account:", accountInformation);
+            console.log("- cryptoParameters:", cryptoParameters);
+            var callerOrigin = document.origin;
+            console.log("Origin:", callerOrigin);
+            var rpId = _makeRpId(callerOrigin);
 
-                // argument checking
-                // set defaults
-                options = options || {};
-                var timeoutSeconds = options.timeoutSeconds;
-                var blacklist = options.blacklist;
-                var extensions = options.extensions;
-                if (timeoutSeconds === undefined) {
-                    timeoutSeconds = defaultTimeout;
+            // argument checking
+            // set defaults
+            options = options || {};
+            var timeoutSeconds = options.timeoutSeconds;
+            var blacklist = options.blacklist;
+            var extensions = options.extensions;
+            if (timeoutSeconds === undefined) {
+                timeoutSeconds = defaultTimeout;
+            }
+            if (timeoutSeconds < minTimeout) {
+                timeoutSeconds = minTimeout;
+            }
+            if (timeoutSeconds > maxTimeout) {
+                timeoutSeconds = maxTimeout;
+            }
+            if (blacklist === undefined) {
+                blacklist = [];
+            }
+            if (extensions === undefined) {
+                extensions = [];
+            }
+
+            // check arguments
+            if (typeof accountInformation !== "object") {
+                return reject (new TypeError ("makeCredential: expected accountInformation argument to be an object, got " + typeof accountInformation));
+            }
+
+            if (typeof accountInformation.rpDisplayName !== "string" ||
+                typeof accountInformation.displayName !== "string" ||
+                typeof accountInformation.id !== "string" ||
+                accountInformation.rpDisplayName.length < 1 ||
+                accountInformation.displayName.length < 1 ||
+                accountInformation.id.length < 1) {
+                console.log ("accountInformation", accountInformation);
+                return reject (new TypeError ("makeCredential: expected accountInformation properties rpDisplayName, displayName and id to be strings"));
+            }
+
+            if (!Array.isArray(cryptoParameters) ||
+                cryptoParameters.length < 1) {
+                return reject (new TypeError ("makeCredential: expected cryptoParameters argument to be a non-empty array"));
+            }
+
+            for (let param of cryptoParameters) {
+                if (param.type !== "ScopedCred") {
+                    return reject (new TypeError ("makeCredential: expected all cryptoParameters to be of type 'ScopedCred', got " + param.type));
                 }
-                if (timeoutSeconds < minTimeout) {
-                    timeoutSeconds = minTimeout;
+                if (typeof param.algorithm !== "string" ||
+                    param.algorithm.length < 1) {
+                    return reject (new TypeError ("makeCredential: expected all cryptoParameters to have an algorithm of type 'String', got " + typeof param.algorithm));
                 }
-                if (timeoutSeconds > maxTimeout) {
-                    timeoutSeconds = maxTimeout;
-                }
-                if (blacklist === undefined) {
-                    blacklist = [];
-                }
-                if (extensions === undefined) {
-                    extensions = [];
+            }
+
+            if ((attestationChallenge instanceof ArrayBuffer) === false) {
+                return reject (new TypeError ("makeCredential: expected attestationChallenge to be an ArrayBuffer"));
+            }
+
+            var issuedRequests = [];
+            var i, current = null;
+
+            // find a crypto type that meets our needs
+            for (i = 0; i < cryptoParameters.length; i++) {
+                current = cryptoParameters[i];
+                if (supportedCryptoTypes.indexOf(current.type) === -1) {
+                    continue;
                 }
 
-                // check arguments
-                if (typeof accountInformation !== "object") {
-                    return reject (new TypeError ("makeCredential: expected accountInformation argument to be an object, got " + typeof accountInformation));
-                }
+                // WebCrypto Section 18.4, Normalizing Algorithm
+                var keyAlgorithm = {
+                    alg: current.algorithm,
+                    op: "generateKey"
+                };
+                current = null;
+                // TODO: not quite sure how to make this work from userland...
+                var x = _normalizeAlgorithm.call (this, keyAlgorithm);
+            }
+            // should be a valid AlgorithmIdentifier object
+            cryptoParameters = current;
 
-                if (typeof accountInformation.rpDisplayName !== "string" ||
-                    typeof accountInformation.displayName !== "string" ||
-                    typeof accountInformation.id !== "string" ||
-                    accountInformation.rpDisplayName.length < 1 ||
-                    accountInformation.displayName.length < 1 ||
-                    accountInformation.id.length < 1) {
-                    console.log ("accountInformation", accountInformation);
-                    return reject (new TypeError ("makeCredential: expected accountInformation properties rpDisplayName, displayName and id to be strings"));
-                }
+            // TODO: process _extensionHookList
 
-                if (!Array.isArray(cryptoParameters) ||
-                    cryptoParameters.length < 1) {
-                    return reject (new TypeError ("makeCredential: expected cryptoParameters argument to be a non-empty array"));
-                }
-
-                for (let param of cryptoParameters) {
-                    if (param.type !== "ScopedCred") {
-                        return reject (new TypeError ("makeCredential: expected all cryptoParameters to be of type 'ScopedCred', got " + param.type));
-                    }
-                    if (typeof param.algorithm !== "string" ||
-                        param.algorithm.length < 1) {
-                        return reject (new TypeError ("makeCredential: expected all cryptoParameters to have an algorithm of type 'String', got " + typeof param.algorithm));
-                    }
-                }
-
-                if ((attestationChallenge instanceof ArrayBuffer) === false) {
-                    return reject (new TypeError ("makeCredential: expected attestationChallenge to be an ArrayBuffer"));
-                }
-
-                var issuedRequests = [];
-
-                var i, current = null;
-                // find a crypto type that meets our needs
-                for (i = 0; i < cryptoParameters.length; i++) {
-                    current = cryptoParameters[i];
-                    if (supportedCryptoTypes.indexOf(current.type) === -1) {
-                        continue;
-                    }
-
-                    // WebCrypto Section 18.4, Normalizing Algorithm
-                    var keyAlgorithm = {
-                        alg: current.algorithm,
-                        op: "generateKey"
-                    };
-                    current = null;
-                    // TODO: not quite sure how to make this work from userland...
-                    var x = _normalizeAlgorithm(keyAlgorithm);
-                }
-                // should be a valid AlgorithmIdentifier object
-                cryptoParameters = current;
-
-                // TODO: process _extensionHookList
-
-                // create clientData hash
-                var clientDataBuffer = new ArrayBuffer(JSON.stringify({
-                    challenge: attestationChallenge,
-                    facet: callerOrigin,
-                    hashAlg: "S256" // TODO: S384, S512, SM3
-                }));
-                // var clientDataHash;
-                // TODO: make sure window.crypto.subtle exists
-                return window.crypto.subtle.digest({
-                            name: "SHA-256",
-                        },
-                        clientDataBuffer
-                    )
-                    .then(function(clientDataHash) {
-                        //returns the hash as an ArrayBuffer
-                        // var hash = new Uint8Array(clientDataHash);
-                        // console.log(hash);
-                        return _callOnAllAuthenticators(timeoutSeconds, "authenticatorMakeCredential", [rpId,
-                            accountInformation,
-                            clientDataHash,
-                            cryptoParameters, // selectedCrypto parameters
-                            blacklist,
-                            extensions
-                        ]);
-                    });
-                // .then(function(ret) {
+            // create clientData hash
+            var clientDataBuffer = new ArrayBuffer(JSON.stringify({
+                challenge: attestationChallenge,
+                facet: callerOrigin,
+                hashAlg: "S256" // TODO: S384, S512, SM3
+            }));
+            // var clientDataHash;
+            // TODO: make sure window.crypto.subtle exists
+            var self = this;
+            return window.crypto.subtle.digest({
+                        name: "SHA-256",
+                    },
+                    clientDataBuffer
+                )
+                .then((clientDataHash) => {
+                    //returns the hash as an ArrayBuffer
+                    // var hash = new Uint8Array(clientDataHash);
+                    // console.log(hash);
+                    console.log ("foo name:", this, self, this.name, self.name);
+                    return _callOnAllAuthenticators.call(self, timeoutSeconds, "authenticatorMakeCredential", [rpId,
+                        accountInformation,
+                        clientDataHash,
+                        cryptoParameters, // selectedCrypto parameters
+                        blacklist,
+                        extensions
+                    ]);
+                })
+                // .then((ret) => {
                 //     console.log("ret");
+                //     return ret;
                 //     // resolve (ret);
                 // })
-                // .catch(function(err) {
+                // .catch((err) => {
                 //     console.error(err);
                 //     reject (err);
                 // });
-            });
         }
 
         /**
@@ -214,7 +215,7 @@ var supportedCryptoTypes = ["FIDO"];
 
             // new promise
             // Return promise
-            // return new Promise(function(resolve, reject) { // TODO: return inner Promise instead
+            // return new Promise((resolve, reject) => { // TODO: return inner Promise instead
             // initialize issuedRequests
             var issuedRequests = [];
 
@@ -231,7 +232,7 @@ var supportedCryptoTypes = ["FIDO"];
                     },
                     clientDataBuffer
                 )
-                .then(function(clientDataHash) { // call authenticatorGetAssertion on all authenticators
+                .then((clientDataHash) => { // call authenticatorGetAssertion on all authenticators
                     // clientDataHash = new Uint8Array(hash);
                     // console.log(clientDataHash);
 
@@ -240,22 +241,22 @@ var supportedCryptoTypes = ["FIDO"];
                     // - call authenticatorGetAssertion
                     // - add entry to issuedRequests
                     // wait for timer or results
-                    return _callOnAllAuthenticators(timeoutSeconds, "authenticatorGetAssertion", [rpId,
+                    return _callOnAllAuthenticators.call(this, timeoutSeconds, "authenticatorGetAssertion", [rpId,
                         assertionChallenge,
                         clientDataHash,
                         whitelist,
                         extensions
                     ]);
                 })
-                .then(function(res) {
+                .then((res) => {
                     console.log("getAssertion res:", res);
                     res.clientData = clientDataBuffer;
                     return Promise.resolve(res);
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     return Promise.reject(err);
                 });
-            // }.bind(this));
+            // });
         }
 
         /*********************************************************************************
@@ -270,8 +271,8 @@ var supportedCryptoTypes = ["FIDO"];
         addAuthenticator(auth) {
             // console.log("addAuthenticator");
 
-            if (auth instanceof fidoAuthenticator) {
-                // console.log("Adding authenticator");
+            if (auth instanceof this.fidoAuthenticator) {
+                console.log("Adding authenticator:", auth.name);
                 this._authenticatorList.push(auth);
             } else {
                 console.log("Adding authenticator: Authenticator was wrong type, failing:", auth);
@@ -399,7 +400,7 @@ var supportedCryptoTypes = ["FIDO"];
         }
     };
 
-    _normalizeAlgorithm = function(keyAlgorithm) {
+     function _normalizeAlgorithm(keyAlgorithm) {
         var res = {};
         if (typeof keyAlgorithm === "string") {
             keyAlgorithm = keyAlgorithm.toLowerCase();
@@ -434,12 +435,13 @@ var supportedCryptoTypes = ["FIDO"];
             }
         }
         return res;
-    }.bind(wa);
+    }
 
     /**
      * Calls a method on all authenticators
      */
     var _callOnAllAuthenticators = function (timeoutSeconds, method, args) {
+        console.log ("_callOnAllAuthenticators name:", this.name);
         return new Promise((resolve, reject) => {
             var pendingTimer = window.setTimeout(function() {
                 console.log("makeCredential timed out");
@@ -469,25 +471,25 @@ var supportedCryptoTypes = ["FIDO"];
                 var ready = Promise.resolve(null);
 
                 promises.forEach(function(promise) {
-                    ready = ready.then(function() {
+                    ready = ready.then(() => {
                         return promise;
-                    }).then(function(value) {
+                    }).then((value) => {
                         // TODO: if result is cancel, then cancel all pending requests
                         console.log("Got value:", value);
                         accumulator.push(value);
-                    }).catch(function(err) {
+                    }).catch((err) => {
                         accumulator.push(err);
                     });
                 });
 
-                return ready.then(function() {
+                return ready.then(() => {
                     return accumulator;
                 });
             }
 
             resolveAll(_pendingList)
-                .then(function(res) {
-                    // console.log("all promises resolved:", res);
+                .then((res) => {
+                    console.log("all promises resolved:", res);
                     window.clearTimeout(pendingTimer);
 
                     // find the succesful result or return error
@@ -499,14 +501,15 @@ var supportedCryptoTypes = ["FIDO"];
                             return resolve(res[i]);
                         }
                     }
+                    console.log ("No successful authenticatons");
                     return resolve(new Error("No successful authenticatons"));
                 })
-                .catch(function(err) {
+                .catch((err) => {
                     console.log("caught error");
                     return reject(err);
                 });
         });
-    }.bind(wa);
+    };
 
     // define navigator.authentication without setter to prevent hijacking
     Object.defineProperty(navigator, "authentication", {
