@@ -7,6 +7,17 @@ var defaultTimeout = 30;
 var supportedCryptoTypes = ["FIDO"];
 
 
+// SECURITY TODO: make sure this meets the requirements for secure context
+// for browsers that don't support secure context
+if (window.isSecureContext === undefined && location.origin.match(/:\/\/localhost|https:\/\//g)) {
+    window.isSecureContext = true;
+}
+
+// for safari's version of webCrypto
+if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
+    window.crypto.subtle = window.crypto.webkitSubtle;
+}
+
 // IIFE module to keep namespace clean and protect internals...
 (function() {
     console.log("Loading WebAuthn polyfill...");
