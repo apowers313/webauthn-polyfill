@@ -18,15 +18,18 @@
     <script src="https://cdn.rawgit.com/domenic/chai-as-promised/4.3.0/lib/chai-as-promised.js"></script>
     <script src="http://sinonjs.org/releases/sinon-1.17.1.js"></script>
     <script>
-    mocha.setup("tdd");
+    mocha.setup("bdd");
     </script>
     <!-- Insert test scripts here -->
     <script src="../webauthn-polyfill.js"></script>
+    <script src="fido2-helpers/fido2-helpers.js"></script>
     <script src="test.js"></script>
     <!-- Run Mocha -->
     <script>
     mocha.checkLeaks();
     mocha.run();
+    /* JSHINT */
+    /* globals mocha */
     </script>
 </body>
 

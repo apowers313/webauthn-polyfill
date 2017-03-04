@@ -6,12 +6,91 @@ var minTimeout = 1; // minimum timeout is 1 second
 var defaultTimeout = 30;
 var supportedCryptoTypes = ["FIDO"];
 
-/*********************************************************************************
- * IIFE module to keep namespace clean and protect internals...
- *********************************************************************************/
+
+// IIFE module to keep namespace clean and protect internals...
 (function() {
     console.log("Loading WebAuthn polyfill...");
+    class ScopedCredential {}
 
+    class WebAuthnAttestation {}
+
+    /**
+     * ScopedCredentialInfo
+     *
+     * The interface object returned by makeCredential
+     */
+    class ScopedCredentialInfo {
+        constructor() {
+            Object.defineProperty (this.__proto__, Symbol.toStringTag, {
+                get: function () {
+                    return "ScopedCredentialInfoPrototype";
+                }
+            });
+            Object.defineProperty (this, Symbol.toStringTag, {
+                get: function () {
+                    return "ScopedCredentialInfo";
+                }
+            });
+            this.__proto__.credential = new ScopedCredential();
+            // this.__proto__.attestation = new WebAuthnAttestation();
+            // this.__proto__.publicKey = null;
+            Object.defineProperty(this.__proto__, "credential", {
+                enumerable: true,
+                configurable: true,
+                get: function () {
+                    throw new TypeError ("function () { [native code] }");
+                },
+            });
+            Object.defineProperty(this.__proto__, "attestation", {
+                enumerable: true,
+                configurable: true,
+                get: function () {
+                    throw new TypeError ("function () { [native code] }");
+                },
+            });
+            Object.defineProperty(this.__proto__, "publicKey", {
+                enumerable: true,
+                configurable: true,
+                get: function () {
+                    throw new TypeError ("function () { [native code] }");
+                },
+            });
+        }
+        init() {
+            return window.crypto.subtle.generateKey({
+                    // TODO: should be options for crypto, bits, hash, etc.
+                    name: "RSASSA-PKCS1-v1_5",
+                    modulusLength: 2048, //can be 1024, 2048, or 4096
+                    publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+                    hash: {
+                        name: "SHA-256" //can be "SHA-1", "SHA-256", "SHA-384", or "SHA-512"
+                    },
+                },
+                false, ["sign", "verify"]
+            ).then((foo) => {
+
+                Object.defineProperty(this, "credential", {
+                    enumerable: true,
+                    configurable: true,
+                    value: new ScopedCredential()
+                });
+                Object.defineProperty(this, "attestation", {
+                    enumerable: true,
+                    configurable: true,
+                    value: new WebAuthnAttestation()
+                });
+                Object.defineProperty(this, "publicKey", {
+                    enumerable: true,
+                    configurable: true,
+                    value: foo.publicKey
+                });
+
+                // this.__proto__.credential = new ScopedCredential();
+                // this.__proto__.attestation = new WebAuthnAttestation();
+                // this.__proto__.publicKey = foo.publicKey;
+            });
+        }
+    }
     /**
      * WebAuthentication
      *
@@ -20,8 +99,23 @@ var supportedCryptoTypes = ["FIDO"];
      */
     class WebAuthentication {
         constructor() {
-                // TODO XXX: check secure context!!
-                // use: _makeRpId() then verify https
+                // configure this object in a way that makes WebIDL / idlharness happy
+                Object.defineProperty (this.__proto__, Symbol.toStringTag, {
+                    get: function () {
+                        return "WebAuthenticationPrototype";
+                    }
+                });
+                Object.defineProperty (this, Symbol.toStringTag, {
+                    get: function () {
+                        return "WebAuthentication";
+                    }
+                });
+                Object.defineProperty (this.__proto__, "makeCredential", {
+                    enumerable: true
+                });
+                Object.defineProperty (this.__proto__, "getAssertion", {
+                    enumerable: true
+                });
 
                 // TODO: rename
                 class fidoAuthenticator {
@@ -40,17 +134,7 @@ var supportedCryptoTypes = ["FIDO"];
 
                 this.fidoAuthenticator = fidoAuthenticator;
                 this._authenticatorList = [];
-                this.name = "bob";
             }
-            /**
-             * toStringTag
-             *
-             * used to identify the IDL interface
-             * XXX: method overloading doesn't work because of the way the W3C idlharness tests this
-             */
-        get[Symbol.toStringTag]() {
-            return "WebAuthentication";
-        }
 
         /**
          * Get Credentials
@@ -61,7 +145,8 @@ var supportedCryptoTypes = ["FIDO"];
             accountInformation,
             cryptoParameters,
             attestationChallenge,
-            options) {
+            ...options) {
+            // TODO set options
             // TODO: Select authenticator
 
             console.log("makeCredential:");
@@ -73,8 +158,11 @@ var supportedCryptoTypes = ["FIDO"];
 
             // argument checking
             // set defaults
+            if (Array.isArray(options)) options = options[0];
             options = options || {};
-            var timeoutSeconds = options.timeoutSeconds;
+
+            console.log ("options:", options);
+            var timeoutSeconds = options.timeout;
             var blacklist = options.blacklist;
             var extensions = options.extensions;
             if (timeoutSeconds === undefined) {
@@ -92,10 +180,11 @@ var supportedCryptoTypes = ["FIDO"];
             if (extensions === undefined) {
                 extensions = [];
             }
+            console.log ("timeoutSeconds:", timeoutSeconds);
 
             // check arguments
-            if (typeof accountInformation !== "object") {
-                return reject (new TypeError ("makeCredential: expected accountInformation argument to be an object, got " + typeof accountInformation));
+            if (!accountInformation || typeof accountInformation !== "object") {
+                return Promise.reject(new TypeError("makeCredential: expected accountInformation argument to be an object, got " + typeof accountInformation));
             }
 
             if (typeof accountInformation.rpDisplayName !== "string" ||
@@ -104,27 +193,27 @@ var supportedCryptoTypes = ["FIDO"];
                 accountInformation.rpDisplayName.length < 1 ||
                 accountInformation.displayName.length < 1 ||
                 accountInformation.id.length < 1) {
-                console.log ("accountInformation", accountInformation);
-                return reject (new TypeError ("makeCredential: expected accountInformation properties rpDisplayName, displayName and id to be strings"));
+                console.log("accountInformation", accountInformation);
+                return Promise.reject(new TypeError("makeCredential: expected accountInformation properties rpDisplayName, displayName and id to be strings"));
             }
 
             if (!Array.isArray(cryptoParameters) ||
                 cryptoParameters.length < 1) {
-                return reject (new TypeError ("makeCredential: expected cryptoParameters argument to be a non-empty array"));
+                return Promise.reject(new TypeError("makeCredential: expected cryptoParameters argument to be a non-empty array"));
             }
 
             for (let param of cryptoParameters) {
                 if (param.type !== "ScopedCred") {
-                    return reject (new TypeError ("makeCredential: expected all cryptoParameters to be of type 'ScopedCred', got " + param.type));
+                    return Promise.reject(new TypeError("makeCredential: expected all cryptoParameters to be of type 'ScopedCred', got " + param.type));
                 }
                 if (typeof param.algorithm !== "string" ||
                     param.algorithm.length < 1) {
-                    return reject (new TypeError ("makeCredential: expected all cryptoParameters to have an algorithm of type 'String', got " + typeof param.algorithm));
+                    return Promise.reject(new TypeError("makeCredential: expected all cryptoParameters to have an algorithm of type 'String', got " + typeof param.algorithm));
                 }
             }
 
             if ((attestationChallenge instanceof ArrayBuffer) === false) {
-                return reject (new TypeError ("makeCredential: expected attestationChallenge to be an ArrayBuffer"));
+                return Promise.reject(new TypeError("makeCredential: expected attestationChallenge to be an ArrayBuffer"));
             }
 
             var issuedRequests = [];
@@ -144,7 +233,7 @@ var supportedCryptoTypes = ["FIDO"];
                 };
                 current = null;
                 // TODO: not quite sure how to make this work from userland...
-                var x = _normalizeAlgorithm.call (this, keyAlgorithm);
+                var x = _normalizeAlgorithm.call(this, keyAlgorithm);
             }
             // should be a valid AlgorithmIdentifier object
             cryptoParameters = current;
@@ -169,7 +258,6 @@ var supportedCryptoTypes = ["FIDO"];
                     //returns the hash as an ArrayBuffer
                     // var hash = new Uint8Array(clientDataHash);
                     // console.log(hash);
-                    console.log ("foo name:", this, self, this.name, self.name);
                     return _callOnAllAuthenticators.call(self, timeoutSeconds, "authenticatorMakeCredential", [rpId,
                         accountInformation,
                         clientDataHash,
@@ -177,16 +265,16 @@ var supportedCryptoTypes = ["FIDO"];
                         blacklist,
                         extensions
                     ]);
-                })
-                // .then((ret) => {
-                //     console.log("ret");
-                //     return ret;
-                //     // resolve (ret);
-                // })
-                // .catch((err) => {
-                //     console.error(err);
-                //     reject (err);
-                // });
+                });
+            // .then((ret) => {
+            //     console.log("ret");
+            //     return ret;
+            //     // resolve (ret);
+            // })
+            // .catch((err) => {
+            //     console.error(err);
+            //     reject (err);
+            // });
         }
 
         /**
@@ -194,15 +282,24 @@ var supportedCryptoTypes = ["FIDO"];
          */
         getAssertion(
             assertionChallenge,
-            timeoutSeconds,
-            whitelist,
-            extensions
+            ...options
         ) {
             console.log("getAssertion");
             var callerOrigin = document.origin;
             var rpId = _makeRpId(callerOrigin);
+
+            // TODO set options
+            console.log ("getAssertion options", options);
+            var timeoutSeconds;
+
             // argument checking
             // TODO: check types
+            if (Array.isArray(options)) options = options[0];
+            options = options || {};
+            var whitelist = options.whitelist || [];
+            var extensions = options.extensions || [];
+            if (typeof options.timeout === "number") timeoutSeconds = options.timeout;
+
             if (timeoutSeconds === undefined) {
                 timeoutSeconds = defaultTimeout;
             }
@@ -250,12 +347,16 @@ var supportedCryptoTypes = ["FIDO"];
                 })
                 .then((res) => {
                     console.log("getAssertion res:", res);
+                    if (typeof res !== "object" || !res) {
+                        return res;
+                    }
                     res.clientData = clientDataBuffer;
-                    return Promise.resolve(res);
-                })
-                .catch((err) => {
-                    return Promise.reject(err);
+                    // return Promise.resolve(res);
+                    return res;
                 });
+                // .catch((err) => {
+                //     return Promise.reject(err);
+                // });
             // });
         }
 
@@ -288,9 +389,9 @@ var supportedCryptoTypes = ["FIDO"];
         removeAllAuthenticators() {
                 this._authenticatorList = [];
             }
-            /*********************************************************************************
-             * Everything below this line is an extension to the specification for managing extensions
-             *********************************************************************************/
+        /*********************************************************************************
+         * Everything below this line is an extension to the specification for managing extensions
+         *********************************************************************************/
         addExtension(extensionHook) {
             this._extensionHookList.push(extensionHook);
         }
@@ -400,14 +501,14 @@ var supportedCryptoTypes = ["FIDO"];
         }
     };
 
-     function _normalizeAlgorithm(keyAlgorithm) {
+    function _normalizeAlgorithm(keyAlgorithm) {
         var res = {};
         if (typeof keyAlgorithm === "string") {
             keyAlgorithm = keyAlgorithm.toLowerCase();
             if (keyAlgorithm in supportedAlgorithms) {
                 if ("dict" in supportedAlgorithms[keyAlgorithm]) {
                     res = supportedAlgorithms[keyAlgorithm].dict;
-                    res = normalizeAlgorithm(res);
+                    res = window.normalizeAlgorithm(res);
                 } else {
                     throw new Error("Algorithm didn't have dictionary");
                 }
@@ -428,7 +529,7 @@ var supportedCryptoTypes = ["FIDO"];
                     res[key] = tmp;
                 }
                 if (key !== "name" && keyAlgorithm[key] in supportedAlgorithms) {
-                    res[key] = normalizeAlgorithm(keyAlgorithm[key]);
+                    res[key] = window.normalizeAlgorithm(keyAlgorithm[key]);
                 } else {
                     res[key] = keyAlgorithm[key];
                 }
@@ -440,8 +541,7 @@ var supportedCryptoTypes = ["FIDO"];
     /**
      * Calls a method on all authenticators
      */
-    var _callOnAllAuthenticators = function (timeoutSeconds, method, args) {
-        console.log ("_callOnAllAuthenticators name:", this.name);
+    var _callOnAllAuthenticators = function(timeoutSeconds, method, args) {
         return new Promise((resolve, reject) => {
             var pendingTimer = window.setTimeout(function() {
                 console.log("makeCredential timed out");
@@ -452,12 +552,12 @@ var supportedCryptoTypes = ["FIDO"];
 
             // attempt to make credentials on each authenticator
             var i, _pendingList = [];
-            console.log ("me:", this);
-            console.log ("authnr list:", this._authenticatorList);
+            console.log("me:", this);
+            console.log("authnr list:", this._authenticatorList);
             for (i = 0; i < this._authenticatorList.length; i++) {
                 // Web API 4.1.1 says to call with: callerOrigin, rpId, account, current.type, normalizedAlgorithm, blacklist, attestationChallenge and clientExtensions
                 // External Authenticator Protocol 4.1 says to use the args below
-                // console.log("Calling authenticatorMakeCredential[" + i + "]");
+                console.log("Calling authenticatorMakeCredential[" + i + "] with:", args);
                 _pendingList.push(
                     this._authenticatorList[i][method].apply(this._authenticatorList[i], args)
                 );
@@ -501,7 +601,7 @@ var supportedCryptoTypes = ["FIDO"];
                             return resolve(res[i]);
                         }
                     }
-                    console.log ("No successful authenticatons");
+                    console.log("No successful authenticatons");
                     return resolve(new Error("No successful authenticatons"));
                 })
                 .catch((err) => {
@@ -511,12 +611,29 @@ var supportedCryptoTypes = ["FIDO"];
         });
     };
 
-    // define navigator.authentication without setter to prevent hijacking
-    Object.defineProperty(navigator, "authentication", {
-        configurable: false,
-        writable: false,
-        value: wa
-    });
-    // freeze returned object to make sure functions aren't hijacked
-    Object.freeze(navigator.authentication);
+    // All WebAuthn interfaces (as defined in WebIDL) should only be exposed in a Secure Context
+    if (window.isSecureContext) {
+        // define navigator.authentication without setter to prevent hijacking
+        Object.defineProperty(navigator, "authentication", {
+            configurable: false,
+            writable: false,
+            value: wa
+        });
+        // freeze returned object to make sure functions aren't hijacked
+        // Object.freeze(navigator.authentication);
+
+        // configure WebIDL interfaces in a way that makes idlharness happy
+        Object.defineProperty(window, "WebAuthentication", {
+            configurable: true,
+            writable: true,
+            enumberable: true,
+            value: WebAuthentication
+        });
+        Object.defineProperty(window, "ScopedCredentialInfo", {
+            configurable: true,
+            writable: true,
+            enumberable: true,
+            value: ScopedCredentialInfo
+        });
+    }
 }());
