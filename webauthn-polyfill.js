@@ -32,13 +32,13 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
      */
     class ScopedCredentialInfo {
         constructor() {
-            Object.defineProperty (this.__proto__, Symbol.toStringTag, {
-                get: function () {
+            Object.defineProperty(this.__proto__, Symbol.toStringTag, {
+                get: function() {
                     return "ScopedCredentialInfoPrototype";
                 }
             });
-            Object.defineProperty (this, Symbol.toStringTag, {
-                get: function () {
+            Object.defineProperty(this, Symbol.toStringTag, {
+                get: function() {
                     return "ScopedCredentialInfo";
                 }
             });
@@ -48,22 +48,22 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             Object.defineProperty(this.__proto__, "credential", {
                 enumerable: true,
                 configurable: true,
-                get: function () {
-                    throw new TypeError ("function () { [native code] }");
+                get: function() {
+                    throw new TypeError("function () { [native code] }");
                 },
             });
             Object.defineProperty(this.__proto__, "attestation", {
                 enumerable: true,
                 configurable: true,
-                get: function () {
-                    throw new TypeError ("function () { [native code] }");
+                get: function() {
+                    throw new TypeError("function () { [native code] }");
                 },
             });
             Object.defineProperty(this.__proto__, "publicKey", {
                 enumerable: true,
                 configurable: true,
-                get: function () {
-                    throw new TypeError ("function () { [native code] }");
+                get: function() {
+                    throw new TypeError("function () { [native code] }");
                 },
             });
         }
@@ -110,42 +110,42 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
      */
     class WebAuthentication {
         constructor() {
-                // configure this object in a way that makes WebIDL / idlharness happy
-                Object.defineProperty (this.__proto__, Symbol.toStringTag, {
-                    get: function () {
-                        return "WebAuthenticationPrototype";
-                    }
-                });
-                Object.defineProperty (this, Symbol.toStringTag, {
-                    get: function () {
-                        return "WebAuthentication";
-                    }
-                });
-                Object.defineProperty (this.__proto__, "makeCredential", {
-                    enumerable: true
-                });
-                Object.defineProperty (this.__proto__, "getAssertion", {
-                    enumerable: true
-                });
-
-                // TODO: rename
-                class fidoAuthenticator {
-                    constructor() {}
-                    authenticatorDiscover() {}
-                    authenticatorMakeCredential() {
-                        console.log("got authenticatorMakeCredential");
-                        return Promise.resolve(null);
-                    }
-                    authenticatorGetAssertion() {
-                        console.log("got authenticatorGetAssertion");
-                        return Promise.resolve(null);
-                    }
-                    authenticatorCancel() {}
+            // configure this object in a way that makes WebIDL / idlharness happy
+            Object.defineProperty(this.__proto__, Symbol.toStringTag, {
+                get: function() {
+                    return "WebAuthenticationPrototype";
                 }
+            });
+            Object.defineProperty(this, Symbol.toStringTag, {
+                get: function() {
+                    return "WebAuthentication";
+                }
+            });
+            Object.defineProperty(this.__proto__, "makeCredential", {
+                enumerable: true
+            });
+            Object.defineProperty(this.__proto__, "getAssertion", {
+                enumerable: true
+            });
 
-                this.fidoAuthenticator = fidoAuthenticator;
-                this._authenticatorList = [];
+            // TODO: rename
+            class fidoAuthenticator {
+                constructor() {}
+                authenticatorDiscover() {}
+                authenticatorMakeCredential() {
+                    console.log("got authenticatorMakeCredential");
+                    return Promise.resolve(null);
+                }
+                authenticatorGetAssertion() {
+                    console.log("got authenticatorGetAssertion");
+                    return Promise.resolve(null);
+                }
+                authenticatorCancel() {}
             }
+
+            this.fidoAuthenticator = fidoAuthenticator;
+            this._authenticatorList = [];
+        }
 
         /**
          * Get Credentials
@@ -172,7 +172,7 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             if (Array.isArray(options)) options = options[0];
             options = options || {};
 
-            console.log ("options:", options);
+            console.log("options:", options);
             var timeoutSeconds = options.timeout;
             var blacklist = options.blacklist;
             var extensions = options.extensions;
@@ -191,7 +191,6 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             if (extensions === undefined) {
                 extensions = [];
             }
-            console.log ("timeoutSeconds:", timeoutSeconds);
 
             // check arguments
             if (!accountInformation || typeof accountInformation !== "object") {
@@ -227,6 +226,8 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                 return Promise.reject(new TypeError("makeCredential: expected attestationChallenge to be an ArrayBuffer"));
             }
 
+            // TODO: validate attestationChallenge
+
             var issuedRequests = [];
             var i, current = null;
 
@@ -252,24 +253,39 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             // TODO: process _extensionHookList
 
             // create clientData hash
-            var clientDataBuffer = new ArrayBuffer(JSON.stringify({
-                challenge: attestationChallenge,
-                facet: callerOrigin,
+            var clientDataJson = JSON.stringify({
+                challenge: b64encode(attestationChallenge),
+                origin: callerOrigin,
                 hashAlg: "S256" // TODO: S384, S512, SM3
-            }));
-            // var clientDataHash;
+            });
+            var clientDataBuffer = str2ab(clientDataJson);
+
             // TODO: make sure window.crypto.subtle exists
-            var self = this;
+            var self = this; // TODO: remove
+            // create client data hash
+            printHex("client data buffer", clientDataBuffer);
+            var clientDataHash, rpIdHash;
             return window.crypto.subtle.digest({
                         name: "SHA-256",
                     },
                     clientDataBuffer
                 )
-                .then((clientDataHash) => {
+                .then((cdh) => {
+                    clientDataHash = cdh;
+                    var rpIdBuf = str2ab(rpId);
+                    printHex("rpIdBuf", rpIdBuf);
+                    return window.crypto.subtle.digest({
+                            name: "SHA-256",
+                        },
+                        rpIdBuf)
+                })
+                .then((rpIdHash) => {
+                    console.log("rpId", rpId);
+                    printHex("rpIdHash", rpIdHash);
                     //returns the hash as an ArrayBuffer
                     // var hash = new Uint8Array(clientDataHash);
                     // console.log(hash);
-                    return _callOnAllAuthenticators.call(self, timeoutSeconds, "authenticatorMakeCredential", [rpId,
+                    return _callOnAllAuthenticators.call(self, timeoutSeconds, "authenticatorMakeCredential", [rpIdHash,
                         accountInformation,
                         clientDataHash,
                         cryptoParameters, // selectedCrypto parameters
@@ -300,7 +316,7 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             var rpId = _makeRpId(callerOrigin);
 
             // TODO set options
-            console.log ("getAssertion options", options);
+            console.log("getAssertion options", options);
             var timeoutSeconds;
 
             // argument checking
@@ -321,6 +337,9 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                 timeoutSeconds = maxTimeout;
             }
 
+            // TODO: validate assertionChallenge
+            console.log("assertionChallenge", assertionChallenge);
+
             // new promise
             // Return promise
             // return new Promise((resolve, reject) => { // TODO: return inner Promise instead
@@ -328,11 +347,15 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             var issuedRequests = [];
 
             // create clientData hash
-            var clientDataBuffer = new ArrayBuffer(JSON.stringify({
-                challenge: assertionChallenge,
-                facet: callerOrigin,
+            var clientDataJson = JSON.stringify({
+                challenge: b64encode(assertionChallenge),
+                origin: callerOrigin,
                 hashAlg: "S256" // TODO: S384, S512, SM3
-            }));
+            });
+            console.log ("clientDataJson", clientDataJson);
+            var clientDataBuffer = str2ab(clientDataJson);
+
+            var clientDataHash;
 
             // TODO: make sure window.crypto.subtle exists
             return window.crypto.subtle.digest({ // create clientDataHash
@@ -340,7 +363,16 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     },
                     clientDataBuffer
                 )
-                .then((clientDataHash) => { // call authenticatorGetAssertion on all authenticators
+                .then((cdh) => {
+                    clientDataHash = cdh;
+                    var rpIdBuf = str2ab(rpId);
+                    printHex("rpIdBuf", rpIdBuf);
+                    return window.crypto.subtle.digest({
+                            name: "SHA-256",
+                        },
+                        rpIdBuf)
+                })
+                .then((rpIdHash) => { // call authenticatorGetAssertion on all authenticators
                     // clientDataHash = new Uint8Array(hash);
                     // console.log(clientDataHash);
 
@@ -349,8 +381,9 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     // - call authenticatorGetAssertion
                     // - add entry to issuedRequests
                     // wait for timer or results
-                    return _callOnAllAuthenticators.call(this, timeoutSeconds, "authenticatorGetAssertion", [rpId,
-                        assertionChallenge,
+                    console.log ("clientDataHash", clientDataHash);
+                    return _callOnAllAuthenticators.call(this, timeoutSeconds, "authenticatorGetAssertion", 
+                        [rpIdHash,
                         clientDataHash,
                         whitelist,
                         extensions
@@ -365,9 +398,9 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     // return Promise.resolve(res);
                     return res;
                 });
-                // .catch((err) => {
-                //     return Promise.reject(err);
-                // });
+            // .catch((err) => {
+            //     return Promise.reject(err);
+            // });
             // });
         }
 
@@ -400,9 +433,9 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
         removeAllAuthenticators() {
                 this._authenticatorList = [];
             }
-        /*********************************************************************************
-         * Everything below this line is an extension to the specification for managing extensions
-         *********************************************************************************/
+            /*********************************************************************************
+             * Everything below this line is an extension to the specification for managing extensions
+             *********************************************************************************/
         addExtension(extensionHook) {
             this._extensionHookList.push(extensionHook);
         }
@@ -421,8 +454,54 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
     function _makeRpId(origin) {
         var parser = document.createElement("a");
         parser.href = origin;
-        // console.log("RPID:", parser.hostname);
+        console.log("RPID:", parser.hostname);
         return parser.hostname;
+    }
+
+    function str2ab(str) {
+        var buf = new ArrayBuffer(str.length);
+        var bufView = new Uint8Array(buf);
+        for (var i = 0, strLen = str.length; i < strLen; i++) {
+            bufView[i] = str.charCodeAt(i);
+        }
+        return buf;
+    }
+
+    function ab2str(buf) {
+        return String.fromCharCode.apply(null, new Uint16Array(buf));
+    }
+
+    // borrowed from:
+    // https://github.com/niklasvh/base64-arraybuffer/blob/master/lib/base64-arraybuffer.js
+    // modified to base64url by Yuriy :)
+    /*
+     * base64-arraybuffer
+     * https://github.com/niklasvh/base64-arraybuffer
+     *
+     * Copyright (c) 2012 Niklas von Hertzen
+     * Licensed under the MIT license.
+     */
+    var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+    function b64encode(arraybuffer) {
+        var bytes = new Uint8Array(arraybuffer),
+            i, len = bytes.length,
+            base64 = "";
+
+        for (i = 0; i < len; i += 3) {
+            base64 += chars[bytes[i] >> 2];
+            base64 += chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+            base64 += chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+            base64 += chars[bytes[i + 2] & 63];
+        }
+
+        if ((len % 3) === 2) {
+            base64 = base64.substring(0, base64.length - 1) + "=";
+        } else if (len % 3 === 1) {
+            base64 = base64.substring(0, base64.length - 2) + "==";
+        }
+
+        return base64;
     }
 
     var supportedAlgorithms = {
@@ -648,3 +727,41 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
         });
     }
 }());
+
+
+// TODO: remove this debug code
+function printHex(msg, buf) {
+    // if the buffer was a TypedArray (e.g. Uint8Array), grab its buffer and use that
+    if (ArrayBuffer.isView(buf) && buf.buffer instanceof ArrayBuffer) {
+        buf = buf.buffer;
+    }
+
+    // check the arguments
+    if ((typeof msg != "string") ||
+        (typeof buf != "object")) {
+        console.log("Bad args to printHex");
+        return;
+    }
+    if (!(buf instanceof ArrayBuffer)) {
+        console.log("Attempted printHex with non-ArrayBuffer:", buf);
+        return;
+    }
+    // print the buffer as a 16 byte long hex string
+    var arr = new Uint8Array(buf);
+    var len = buf.byteLength;
+    var i, str = "";
+    console.log(msg);
+    for (i = 0; i < len; i++) {
+        var hexch = arr[i].toString(16);
+        hexch = (hexch.length == 1) ? ("0" + hexch) : hexch;
+        str += hexch.toUpperCase() + " ";
+        if (i && !((i + 1) % 16)) {
+            console.log(str);
+            str = "";
+        }
+    }
+    // print the remaining bytes
+    if ((i) % 16) {
+        console.log(str);
+    }
+}
