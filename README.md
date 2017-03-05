@@ -1,5 +1,9 @@
 # WebAuthn: A W3C WebAuthn Polyfill
 
+[![Build Status](https://travis-ci.org/apowers313/webauthn-polyfill.svg?branch=master)](https://travis-ci.org/apowers313/webauthn-polyfill)
+
+[![Sauce Test Status](https://saucelabs.com/browser-matrix/apowers313.svg)](https://saucelabs.com/u/apowers313)
+
 This is a work in progress. Don't use it.
 
 See also: http://w3c.github.io/webauthn/
