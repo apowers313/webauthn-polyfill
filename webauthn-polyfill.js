@@ -252,24 +252,11 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
 
             // TODO: process _extensionHookList
 
-            // create clientData hash
-            var clientDataJson = JSON.stringify({
-                challenge: b64encode(attestationChallenge),
-                origin: callerOrigin,
-                hashAlg: "S256" // TODO: S384, S512, SM3
-            });
-            var clientDataBuffer = str2ab(clientDataJson);
-
             // TODO: make sure window.crypto.subtle exists
             var self = this; // TODO: remove
             // create client data hash
-            printHex("client data buffer", clientDataBuffer);
-            var clientDataHash, rpIdHash;
-            return window.crypto.subtle.digest({
-                        name: "SHA-256",
-                    },
-                    clientDataBuffer
-                )
+            var clientDataHash;
+            return _createClientDataHash(attestationChallenge, callerOrigin)
                 .then((cdh) => {
                     clientDataHash = cdh;
                     var rpIdBuf = str2ab(rpId);
@@ -288,7 +275,7 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     return _callOnAllAuthenticators.call(self, timeoutSeconds, "authenticatorMakeCredential", [rpIdHash,
                         accountInformation,
                         clientDataHash,
-                        cryptoParameters, // selectedCrypto parameters
+                        "ScopedCred",
                         blacklist,
                         extensions
                     ]);
@@ -352,17 +339,13 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                 origin: callerOrigin,
                 hashAlg: "S256" // TODO: S384, S512, SM3
             });
-            console.log ("clientDataJson", clientDataJson);
+            console.log("clientDataJson", clientDataJson);
             var clientDataBuffer = str2ab(clientDataJson);
 
             var clientDataHash;
 
             // TODO: make sure window.crypto.subtle exists
-            return window.crypto.subtle.digest({ // create clientDataHash
-                        name: "SHA-256",
-                    },
-                    clientDataBuffer
-                )
+            return _createClientDataHash(assertionChallenge, callerOrigin)
                 .then((cdh) => {
                     clientDataHash = cdh;
                     var rpIdBuf = str2ab(rpId);
@@ -381,9 +364,8 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     // - call authenticatorGetAssertion
                     // - add entry to issuedRequests
                     // wait for timer or results
-                    console.log ("clientDataHash", clientDataHash);
-                    return _callOnAllAuthenticators.call(this, timeoutSeconds, "authenticatorGetAssertion", 
-                        [rpIdHash,
+                    console.log("clientDataHash", clientDataHash);
+                    return _callOnAllAuthenticators.call(this, timeoutSeconds, "authenticatorGetAssertion", [rpIdHash,
                         clientDataHash,
                         whitelist,
                         extensions
@@ -451,6 +433,22 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
     /*********************************************************************************
      * Everything below this line is internal support functions
      *********************************************************************************/
+    // create clientData hash
+    function _createClientDataHash(challenge, callerOrigin) {
+        var clientDataJson = JSON.stringify({
+            challenge: b64encode(challenge),
+            origin: callerOrigin,
+            hashAlg: "S256" // TODO: S384, S512, SM3
+        });
+        var clientDataBuffer = str2ab(clientDataJson);
+
+        return window.crypto.subtle.digest({
+                name: "SHA-256",
+            },
+            clientDataBuffer
+        );
+    }
+
     function _makeRpId(origin) {
         var parser = document.createElement("a");
         parser.href = origin;

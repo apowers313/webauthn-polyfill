@@ -73,8 +73,9 @@ describe("makeCredential", function() {
                 assert.deepEqual (spy.args[0][1], h.userAccountInformation);
                 assert.deepEqual (spy.args[0][2], h.clientDataHash);
                 assert.deepEqual (spy.args[0][3], h.expectedCryptoParams);
-                sinon.assert.alwaysCalledWithExactly(spy, h.rpIdHash, h.userAccountInformation, h.clientDataHash, h.expectedCryptoParams, [], []);
+                sinon.assert.alwaysCalledWithExactly(spy, h.rpIdHash, h.userAccountInformation, h.clientDataHash, "ScopedCred", [], []);
                 assert(arrayBufferEquals(h.rpIdHash, spy.args[0][0]), "rpIdHash didn't match");
+                printHex ("spy.args[0][2])", spy.args[0][2]);
                 assert(arrayBufferEquals(h.clientDataHash, spy.args[0][2]), "clientDataHash didn't match");
                 assert.deepEqual(ret, null, "Should return null ret");
             });
