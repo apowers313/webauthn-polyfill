@@ -1,16 +1,6 @@
 var assert = chai.assert;
 var h = fido2Helpers;
 
-function arrayBufferEquals(b1, b2) {
-    if (b1.byteLength !== b2.byteLength) return false;
-    b1 = new Uint8Array(b1);
-    b2 = new Uint8Array(b2);
-    for (let i = 0; i < b1.byteLength; i++) {
-        if (b1[i] !== b2[i]) return false;
-    }
-    return true;
-}
-
 /*
  * Basic tests
  * If these fail, probably something isn't loaded right and certainly everything else is going to fail
@@ -74,9 +64,9 @@ describe("makeCredential", function() {
                 assert.deepEqual (spy.args[0][2], h.clientDataHash);
                 assert.deepEqual (spy.args[0][3], h.expectedCryptoParams);
                 sinon.assert.alwaysCalledWithExactly(spy, h.rpIdHash, h.userAccountInformation, h.clientDataHash, "ScopedCred", [], []);
-                assert(arrayBufferEquals(h.rpIdHash, spy.args[0][0]), "rpIdHash didn't match");
+                assert(h.arrayBufferEquals(h.rpIdHash, spy.args[0][0]), "rpIdHash didn't match");
                 printHex ("spy.args[0][2])", spy.args[0][2]);
-                assert(arrayBufferEquals(h.clientDataHash, spy.args[0][2]), "clientDataHash didn't match");
+                assert(h.arrayBufferEquals(h.clientDataHash, spy.args[0][2]), "clientDataHash didn't match");
                 assert.deepEqual(ret, null, "Should return null ret");
             });
     });
@@ -279,8 +269,8 @@ describe("getAssertion Tests", function() {
                 //         extensions
                 sinon.assert.alwaysCalledWithExactly(spy, h.rpIdHash, h.clientDataHash, [], []);
                 assert.deepEqual(ret, null, "Should return null ret");
-                assert(arrayBufferEquals(h.rpIdHash, spy.args[0][0]), "rpIdHash didn't match");
-                assert(arrayBufferEquals(h.clientDataHash, spy.args[0][1]), "clientDataHash didn't match");
+                assert(h.arrayBufferEquals(h.rpIdHash, spy.args[0][0]), "rpIdHash didn't match");
+                assert(h.arrayBufferEquals(h.clientDataHash, spy.args[0][1]), "clientDataHash didn't match");
             });
     });
 
@@ -315,4 +305,4 @@ describe("Proprietary Tests", function() {
 });
 
 /* JSHINT */
-/* globals sinon, afterEach */
+/* globals sinon, afterEach, fido2Helpers, chai */
