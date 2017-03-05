@@ -280,7 +280,7 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     if (typeof scopedCredInfo === "object" &&
                         typeof scopedCredInfo.credential === "object" &&
                         typeof scopedCredInfo.attestation === "object") {
-                        scopedCredInfo.clientData = clientData.jsonBuf;
+                        scopedCredInfo.clientDataJSON = clientData.jsonBuf;
                         return scopedCredInfo;
                     }
                 });
@@ -365,14 +365,14 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                         extensions
                     ]);
                 })
-                .then((res) => {
+                .then((webAuthnAssertion) => {
                     console.log("getAssertion res:", res);
                     if (typeof res !== "object" || !res) {
                         return res;
                     }
-                    res.clientData = clientData.jsonBuf;
+                    webAuthnAssertion.clientDataJSON = clientData.jsonBuf;
                     // return Promise.resolve(res);
-                    return res;
+                    return webAuthnAssertion;
                 });
             // .catch((err) => {
             //     return Promise.reject(err);
