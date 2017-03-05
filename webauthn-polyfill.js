@@ -255,30 +255,34 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             // TODO: make sure window.crypto.subtle exists
             var self = this; // TODO: remove
             // create client data hash
-            var clientDataHash;
+            var clientData;
             return _createClientDataHash(attestationChallenge, callerOrigin)
-                .then((cdh) => {
-                    clientDataHash = cdh;
+                .then((cd) => {
+                    clientData = cd;
                     var rpIdBuf = str2ab(rpId);
-                    printHex("rpIdBuf", rpIdBuf);
                     return window.crypto.subtle.digest({
                             name: "SHA-256",
                         },
                         rpIdBuf)
                 })
                 .then((rpIdHash) => {
-                    console.log("rpId", rpId);
-                    printHex("rpIdHash", rpIdHash);
                     //returns the hash as an ArrayBuffer
-                    // var hash = new Uint8Array(clientDataHash);
-                    // console.log(hash);
                     return _callOnAllAuthenticators.call(self, timeoutSeconds, "authenticatorMakeCredential", [rpIdHash,
                         accountInformation,
-                        clientDataHash,
+                        clientData.hash,
                         "ScopedCred",
                         blacklist,
                         extensions
                     ]);
+                })
+                .then((scopedCredInfo) => {
+                    // if the call passed, mix in the clientData
+                    if (typeof scopedCredInfo === "object" &&
+                        typeof scopedCredInfo.credential === "object" &&
+                        typeof scopedCredInfo.attestation === "object") {
+                        scopedCredInfo.clientData = clientData.jsonBuf;
+                        return scopedCredInfo;
+                    }
                 });
             // .then((ret) => {
             //     console.log("ret");
@@ -333,27 +337,18 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
             // initialize issuedRequests
             var issuedRequests = [];
 
-            // create clientData hash
-            var clientDataJson = JSON.stringify({
-                challenge: b64encode(assertionChallenge),
-                origin: callerOrigin,
-                hashAlg: "S256" // TODO: S384, S512, SM3
-            });
-            console.log("clientDataJson", clientDataJson);
-            var clientDataBuffer = str2ab(clientDataJson);
-
-            var clientDataHash;
+            var clientData;
 
             // TODO: make sure window.crypto.subtle exists
             return _createClientDataHash(assertionChallenge, callerOrigin)
-                .then((cdh) => {
-                    clientDataHash = cdh;
+                .then((cd) => {
+                    clientData = cd;
                     var rpIdBuf = str2ab(rpId);
                     printHex("rpIdBuf", rpIdBuf);
                     return window.crypto.subtle.digest({
                             name: "SHA-256",
                         },
-                        rpIdBuf)
+                        rpIdBuf);
                 })
                 .then((rpIdHash) => { // call authenticatorGetAssertion on all authenticators
                     // clientDataHash = new Uint8Array(hash);
@@ -364,9 +359,8 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     // - call authenticatorGetAssertion
                     // - add entry to issuedRequests
                     // wait for timer or results
-                    console.log("clientDataHash", clientDataHash);
                     return _callOnAllAuthenticators.call(this, timeoutSeconds, "authenticatorGetAssertion", [rpIdHash,
-                        clientDataHash,
+                        clientData.hash,
                         whitelist,
                         extensions
                     ]);
@@ -376,7 +370,7 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
                     if (typeof res !== "object" || !res) {
                         return res;
                     }
-                    res.clientData = clientDataBuffer;
+                    res.clientData = clientData.jsonBuf;
                     // return Promise.resolve(res);
                     return res;
                 });
@@ -443,10 +437,17 @@ if (window.crypto && !window.crypto.subtle && window.crypto.webkitSubtle) {
         var clientDataBuffer = str2ab(clientDataJson);
 
         return window.crypto.subtle.digest({
-                name: "SHA-256",
-            },
-            clientDataBuffer
-        );
+                    name: "SHA-256",
+                },
+                clientDataBuffer
+            )
+            .then((hash) => {
+                return {
+                    hash: hash,
+                    jsonBuf: clientDataBuffer,
+                    json: clientDataJson
+                };
+            });
     }
 
     function _makeRpId(origin) {
